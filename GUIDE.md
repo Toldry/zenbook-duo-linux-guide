@@ -29,7 +29,8 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [4.2 Start the live session](#42-start-the-live-session)
    - [4.3 Hardware test checklist](#43-hardware-test-checklist)
    - [4.4 Run the read-only "duo doctor" check](#44-run-the-read-only-duo-doctor-check)
-   - [4.5 Shut down](#45-shut-down)
+   - [4.5 Optional: try the add-on without installing](#45-optional-try-the-add-on-without-installing)
+   - [4.6 Shut down](#46-shut-down)
 5. [Decision point](#5-decision-point)
 6. [Part B: Install Ubuntu onto the external USB drive](#6-part-b-install-ubuntu-onto-the-external-usb-drive)
    - [6.1 Connect both drives](#61-connect-both-drives)
@@ -242,17 +243,20 @@ Nothing in this step writes to the laptop's internal disk.
 
 ### 4.1 Boot from the USB stick
 
-**Method 1: from inside Windows (easiest, no key timing):**
+**Method 1: the boot menu key (recommended):**
+
+1. Plug in USB stick #1. Dock the keyboard on the lower screen.
+2. **Shut down** completely (not Restart).
+3. Press the power button (a normal short press), then **tap `Esc` repeatedly** until a boot menu appears.
+4. Pick the USB stick (the entry starting with **UEFI:**).
+
+**Method 2: from inside Windows (no key timing, but see the warning):**
 
 1. Plug in USB stick #1. Dock the keyboard on the lower screen.
 2. **Settings → System → Recovery → Advanced startup → Restart now.**
 3. On the blue screen, choose **Use a device** and pick your USB stick (often listed as "UEFI: <brand name>").
 
-**Method 2: the boot menu key:**
-
-1. Shut down completely.
-2. Press the power button, then **tap `Esc` repeatedly** until a boot menu appears.
-3. Pick the USB stick (the entry starting with **UEFI:**).
+> ⚠️ **Method 2 can leave the speakers completely silent in Linux.** It's a *restart* from Windows, so the speaker amplifiers are never powered off, and Linux can't start them (`sudo dmesg | grep -i cs35l41` shows `Failed waiting for CS35L41_PUP_DONE_MASK: -110`). If that happens, power off from Ubuntu and boot again with Method 1. Prefer Method 1 whenever you want to test or use sound.
 
 > **Do not change the permanent boot order in the UEFI settings, and do not turn off Secure Boot.** The one-time boot menu leaves everything else as it was, which is the safest choice for BitLocker. Ubuntu works with Secure Boot on.
 
@@ -261,6 +265,17 @@ Nothing in this step writes to the laptop's internal disk.
 1. A black GRUB menu appears. Pick **Try or Install Ubuntu**.
 2. When the welcome window appears, choose your language and then **Try Ubuntu** (not Install).
 3. You're now in a temporary Ubuntu desktop. Nothing you do here is saved.
+4. **Check the session type** (needed for the add-on test in [4.5](#45-optional-try-the-add-on-without-installing); optional otherwise). Open **Terminal** (`Ctrl + Alt + T`) and run:
+   ```bash
+   echo $XDG_SESSION_TYPE
+   ```
+   If it prints `wayland`, you're done. If it prints `x11`, the live image has Wayland turned off in the login screen's settings (seen on a 24.04.5 image). Turn it back on:
+   ```bash
+   grep -i wayland /etc/gdm3/custom.conf      # shows WaylandEnable=false
+   sudo sed -i 's/^WaylandEnable=false/#WaylandEnable=false/' /etc/gdm3/custom.conf
+   sudo systemctl restart gdm3
+   ```
+   The last command closes the desktop immediately. The live session logs you back in by itself (there's no login screen and no session gear to click), now on Wayland. Files in the live session survive this; only a power-off wipes them. Check again with `echo $XDG_SESSION_TYPE`.
 
 ### 4.3 Hardware test checklist
 
@@ -278,7 +293,7 @@ Work through this list and record the results. They'll help you decide in Step 5
 | 8 | Wi-Fi after lifting keyboard | Check whether Wi-Fi stays connected | ✅ Should stay on (kernel 6.11+). If it drops, your kernel is too old. | |
 | 9 | Pair keyboard over Bluetooth | **Settings → Bluetooth**, keyboard off the laptop, **hold `F10` for 4–5 s** until the light blinks blue quickly, then pick it in the list | ✅ Pairs | |
 | 10 | Fn keys (brightness/volume) | Press them while docked | ⚠️ Often don't work (the add-on fixes this) | |
-| 11 | Speakers | Play a YouTube video | ⚠️ Works but sounds flatter than on Windows | |
+| 11 | Speakers | Play a YouTube video | ⚠️ Works but sounds flatter than on Windows. **Completely silent** → you probably booted with Method 2; see the warning in [4.1](#41-boot-from-the-usb-stick) | |
 | 12 | Screen flicker | Watch the OLED for a minute | ⚠️ May flicker (the add-on turns off "Panel Self Refresh") | |
 | 13 | Webcam | Open the **Cheese** app if available | Usually ✅ | |
 
@@ -308,9 +323,56 @@ uname -r
 
 It should be **6.11 or higher**.
 
-### 4.5 Shut down
+**Reading the report.** The last line that matters is `GATE: no MUST failures`. In a plain live session, expect these warnings; they match the ⚠️ items in 4.3 and the add-on fixes them:
+
+| Warning | Means | Matches 4.3 item |
+|---|---|---|
+| `bottom panel is ON with the keyboard docked` | Nothing turns the lower screen off under the keyboard | 7 |
+| `hid_asus not bound to 0b05:1b2c` | Typing works; Fn/media keys need the add-on. **Stays even after the add-on is installed**: the kernel has no entry for this keyboard yet, and the add-on works around it | 10 |
+| `touch and pen: 4 of 4 settings not in place` | Touching the bottom screen acts on the top one | 4 |
+| `hidraw node … not writable by this user` | The add-on's keyboard permissions aren't installed yet | 10 |
+
+These kernel log lines in the last section are harmless:
+
+- `asus_wmi: fan_curve_get_factory_default … failed: -19`: this model has no custom fan curves. The fans still run on automatic control.
+- `i915 … Selective fetch area calculation failed` and `i915 … CPU pipe B FIFO underrun`: side effects of Panel Self Refresh (the flicker feature the add-on turns off) and of a screen being switched on or off. Only worry if you see actual glitches.
+
+This one is **not** harmless:
+
+- `cs35l41-hda … Failed waiting for CS35L41_PUP_DONE_MASK: -110`: the speaker amplifiers didn't start. See the warning in [4.1](#41-boot-from-the-usb-stick).
+
+### 4.5 Optional: try the add-on without installing
+
+You can test the add-on in the live session. Everything it writes goes to RAM and disappears at power-off, like everything else in the live session.
+
+`install.sh` itself refuses to run in a live session (*"live-USB session detected"*), so run its pieces one by one instead. First make sure the session is on Wayland ([4.2](#42-start-the-live-session), step 4). Then, from the folder you cloned in 4.4:
+
+```bash
+cd ~/linux-on-zenbook-duo
+sudo bash system/10-packages.sh    # small helper packages from Ubuntu's repositories
+sudo bash system/45-udev.sh        # keyboard permissions (Fn keys, keyboard backlight)
+sudo bash system/50-sudoers.sh     # root helper: lets brightness keys reach the bottom screen
+sudo bash system/55-touchpad.sh    # palm rejection for the keyboard's touchpad
+./install.sh --user                # background services: dock policy, touch mapping, Fn keys
+```
+
+Then **log out** (top-right menu → **Log Out**). The live session logs you straight back in, and the desktop now loads the palm-rejection setting. Nothing is lost.
+
+What this deliberately skips:
+- `20-kernel.sh`: it would download two kernels into RAM for nothing.
+- `30-grub.sh`: the flicker fix only takes effect after a reboot, so 4.3 item 12 can't be tested here.
+
+Run `bin/duo-cli doctor` again, with the keyboard **docked**, and redo 4.3 items 4, 7, 9 and 10. The bottom screen should turn off and on with the keyboard, touch should land on the screen you touch, and the Fn keys should work, with brightness changing both screens.
+
+> **Don't reboot** to "apply" anything. A reboot wipes the live session, including this test.
+
+### 4.6 Shut down
 
 Click top-right → **Power Off**. Remove the stick when told to. The laptop then boots Windows as usual.
+
+If the screen stays on *"Please remove the installation medium, then press ENTER"* and Enter does nothing (with any keyboard), Ubuntu has already finished shutting down, and the keyboard drivers are gone. **Hold the power button for about 10 seconds** to switch off. It's safe at that point.
+
+> If Windows then can't see the bottom screen, see *"Bottom screen not detected in Windows"* in [Troubleshooting](#10-troubleshooting).
 
 ---
 
@@ -318,7 +380,7 @@ Click top-right → **Power Off**. Remove the stick when told to. The laptop the
 
 - **Most things are ✅ or ⚠️, and the ⚠️ items match the table:** continue to Part B. The add-on handles the ⚠️ items.
 - **Something is badly broken** (e.g. a screen is black, the keyboard doesn't type when docked, Wi-Fi doesn't work at all): stop here. Try a newer Ubuntu (25.10 / 26.04) live session, or ask in the [asusctl issue #25](https://github.com/flukejones/asusctl/issues/25) thread with your duo doctor output.
-- **You just wanted to look around, or test feasibility with a single small stick:** you're done. Nothing was changed. Your filled-in checklist (4.3) and the `duo-cli doctor` output are your feasibility answer.
+- **You just wanted to look around, or test feasibility with a single small stick:** you're done. Nothing was changed. Your filled-in checklist (4.3), the `duo-cli doctor` output and, if you tried it, the add-on test (4.5) are your feasibility answer.
 
 ---
 
@@ -444,7 +506,7 @@ This copies the Secure-Boot-signed boot files to the generic location `\EFI\BOOT
 ### 8.1 Boot the installed Ubuntu
 
 1. Plug in the **target USB drive** (#2), dock the keyboard, and power on.
-2. Tap **`Esc`** → pick the USB drive (**UEFI: <drive name>**), or use **Windows → Settings → Recovery → Advanced startup → Use a device**.
+2. Tap **`Esc`** → pick the USB drive (**UEFI: <drive name>**). (**Windows → Settings → Recovery → Advanced startup → Use a device** also works, but it can leave the speakers silent; see the warning in [4.1](#41-boot-from-the-usb-stick).)
 3. If you set a Secure Boot password in 6.3, a **blue "Perform MOK management" screen** appears the first time: choose **Enroll MOK → Continue → Yes**, type the password, then **Reboot**.
 4. Log in with the account you created.
 
@@ -475,6 +537,10 @@ bin/duo-cli doctor        # read-only check, same as in Part A
 
 Then reboot. The installer is safe to run more than once ("idempotent"), so if something goes wrong halfway, you can simply run `./install.sh` again.
 
+(`./install.sh` only works on an installed system. In a live session it stops with *"live-USB session detected"*; use [4.5](#45-optional-try-the-add-on-without-installing) there instead.)
+
+What it changes, so you know what you're agreeing to: it installs a few packages from Ubuntu's repositories, the HWE and standard kernels, the `i915.enable_psr=0` boot option (in the USB drive's own GRUB), the `duo` commands under `/usr/local`, a udev rule, a touchpad quirk, a speaker-amp *reporter* that only reads the kernel log, and a **sudoers rule** that lets your account run one small helper as root without a password. That helper only accepts three checked commands: set a backlight level, set a battery charge limit, and copy your display layout to the login screen. It downloads nothing at install time besides Ubuntu packages, and never touches the internal disk. `./uninstall.sh` removes all of it.
+
 For the **2025 model (UX8406CA)**, use [Fmstrat/zenbook-duo-linux](https://github.com/Fmstrat/zenbook-duo-linux) instead and follow its README. JowiAoun's project says the 2025 model is *likely* compatible but untested.
 
 > Before you run any script from the internet, it's good practice to at least skim it. Open `install.sh` in the Text Editor first. You don't need to understand every line, just make sure it's what the README describes.
@@ -493,6 +559,8 @@ Go back to the table in [Step 4.3](#43-hardware-test-checklist). Items 4, 7, 10,
 
 On the login screen, a gear icon (bottom-right, after clicking your name) lets you pick the session. Keep it on **Ubuntu** (Wayland), **not "Ubuntu on Xorg"**. The display features of the add-on need GNOME on Wayland.
 
+Check with `echo $XDG_SESSION_TYPE` (it should print `wayland`). If there's no gear and it prints `x11`, Wayland is turned off in the login screen's settings. Run `grep -i wayland /etc/gdm3/custom.conf`. If that shows `WaylandEnable=false` without a `#` in front, fix it the same way as in [4.2](#42-start-the-live-session), step 4, then log out and back in.
+
 ---
 
 ## 9. Everyday use: switching between Windows and Linux
@@ -500,14 +568,14 @@ On the login screen, a gear icon (bottom-right, after clicking your name) lets y
 | You want… | Do this |
 |---|---|
 | **Windows** | Unplug the USB drive (or leave it in) and power on normally. |
-| **Ubuntu** | Plug in the USB drive → power on → tap **`Esc`** → pick the USB drive. |
-| **Ubuntu, from inside Windows** | Settings → System → Recovery → Advanced startup → **Use a device**. |
+| **Ubuntu** | Plug in the USB drive → power on **from off** → tap **`Esc`** → pick the USB drive. |
+| **Ubuntu, from inside Windows** | **Shut Down** Windows, then do the row above. (Advanced startup → **Use a device** is a restart and can leave the speakers silent.) |
 
 **Rules of thumb:**
 
 - 🔌 **Never unplug the USB drive while Ubuntu is running.** It's like pulling the hard drive out of a running PC. Shut down first.
 - 💤 **Prefer shutting down over sleep in Ubuntu.** Sleeping with the OS on a USB drive works on most setups but is the most likely place for glitches. Test it a few times before you trust it.
-- 🔋 **Always do a full Shut Down (not Restart) when switching from Windows to Ubuntu**, if the speakers ever sound distorted.
+- 🔋 **Always do a full Shut Down (not Restart) when switching from Windows to Ubuntu.** The speaker amplifiers only start cleanly in Linux after a real power-off.
 - 🔄 **Keep both systems updated.** If a Windows update ever makes the USB drive stop booting, see Troubleshooting.
 - 💾 **Back up the USB drive.** Flash drives fail without warning. Ubuntu has a built-in **Backups** app (Déjà Dup).
 
@@ -526,8 +594,13 @@ On the login screen, a gear icon (bottom-right, after clicking your name) lets y
 | Wi-Fi turns off when you lift the keyboard | Kernel older than 6.11 | `sudo apt full-upgrade`, then check `uname -r` |
 | Docked keyboard suddenly stops responding | Known hardware/firmware glitch with the pogo-pin connection | Lift the keyboard off and put it back |
 | Fn keys don't work | Add-on not installed or not running | Re-run `./install.sh`; reboot |
+| Brightness keys only change the top screen | The add-on's root helper isn't installed (doctor: *"root helper not installed"*) | Installed system: re-run `./install.sh`. Live session: `sudo bash system/50-sudoers.sh` (see [4.5](#45-optional-try-the-add-on-without-installing)) |
+| Palm rejection doesn't work right after installing the add-on | The desktop reads touchpad quirks only when it starts | Log out and back in |
+| Session is "Ubuntu on Xorg" and there's no gear on the login screen | `WaylandEnable=false` in `/etc/gdm3/custom.conf` | See [4.2](#42-start-the-live-session), step 4 |
 | Second screen black after an update | A kernel regression (happened once in 2024) | At the GRUB menu, pick **Advanced options for Ubuntu** → the **previous** kernel |
-| Speakers sound harsh/distorted | Windows Fast Startup left the amplifier in a bad state | Make sure `powercfg /h off` was run; do a full **Shut Down** from Windows, then boot Ubuntu |
+| Speakers **silent**, or harsh/distorted; `sudo dmesg \| grep -i cs35l41` shows `Failed waiting for CS35L41_PUP_DONE_MASK: -110` | The speaker amplifiers weren't powered off before Linux started: you restarted from Windows (Advanced startup → Use a device), or Fast Startup is on | Power off from Ubuntu (or **Shut Down** Windows), then boot with **`Esc`**. Make sure Fast Startup is off ([2.2](#22-turn-off-fast-startup)). Don't try to fix it by reloading drivers; that makes it worse |
+| Live session stuck at *"Please remove the installation medium, then press ENTER"*; no keyboard responds | Ubuntu has already shut down, and the keyboard drivers are gone | **Hold the power button for about 10 seconds.** Safe at this point |
+| **Bottom screen not detected in Windows** (Device Manager → View → Show hidden devices → Monitors shows a greyed-out *MyASUS_Splendid*). Restarts and `Win + Ctrl + Shift + B` don't help | The laptop's embedded controller (the always-on chip that manages power) kept the bottom panel switched off, typically after a forced power-off | **Embedded-controller reset:** shut down, **unplug the charger**, **detach the keyboard** (not resting on the screen), **hold the power button for 40 seconds** (keep holding even if it turns on), release, plug the charger back in, power on |
 | Ubuntu very slow | The USB drive is too slow | Use an external SSD on a USB-C port |
 | A Windows update made the USB drive unbootable | A Secure Boot list (DBX/SBAT) update blocked an old boot loader (happened in August 2024) | Boot the **installer stick**, open a terminal in the live session, and follow Ubuntu's current guidance for that update; or reinstall onto the USB drive with a newer Ubuntu ISO. Windows is not affected |
 
@@ -553,7 +626,8 @@ Because nothing was installed on the internal disk, undoing is simple:
 
 ## 12. Sources
 
-- [JowiAoun/linux-on-zenbook-duo](https://github.com/JowiAoun/linux-on-zenbook-duo): install commands, `duo-cli doctor`, kernel ≥ 6.11 and Fast Startup warnings, tested on Ubuntu 24.04.4
+- [JowiAoun/linux-on-zenbook-duo](https://github.com/JowiAoun/linux-on-zenbook-duo): install commands, `duo-cli doctor`, kernel ≥ 6.11 and Fast Startup warnings, tested on Ubuntu 24.04.4. Its [`system/46-speaker-amp.sh`](https://github.com/JowiAoun/linux-on-zenbook-duo/blob/main/system/46-speaker-amp.sh) documents the CS35L41 speaker-amp failure and why a cold power-off is the fix
+- Hands-on test on a UX8406MA with an Ubuntu 24.04.5 live session (kernel 7.0), October 2026: the boot-method speaker problem, the live image's Wayland setting, the live-session add-on test, and the embedded-controller reset
 - [Fmstrat/zenbook-duo-linux](https://github.com/Fmstrat/zenbook-duo-linux): 2025 model (UX8406CA) support
 - [alesya-h/zenbook-duo-2024-ux8406ma-linux](https://github.com/alesya-h/zenbook-duo-2024-ux8406ma-linux/): the original scripts
 - [asusctl issue #25](https://github.com/flukejones/asusctl/issues/25): developer discussion
