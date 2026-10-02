@@ -125,13 +125,39 @@ Your Windows drive is probably encrypted. Changes to the startup process can mak
 
 ### 2.2 Turn off Fast Startup
 
-Fast Startup doesn't fully shut Windows down. That can leave the speaker amplifier in a bad state, so Linux sounds harsh or distorted. In the same admin terminal, run:
+Fast Startup doesn't fully shut Windows down. When you click **Shut Down**, Windows logs you out but saves the kernel and drivers to a file on disk (`C:\hiberfil.sys`) and resumes from it on the next boot, instead of starting fresh. Hardware is never fully reset, which can leave the speaker amplifier in a bad state, so Linux sounds harsh or distorted. It can also leave the Windows drive "locked", so Linux can only read it, not write to it.
+
+Fast Startup is built on top of hibernation, so turning hibernation off turns Fast Startup off too.
+
+**Check the current state** (in the same admin terminal):
+
+```powershell
+powercfg /a
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled
+```
+
+Fast Startup is **on** only if both are true:
+- `powercfg /a` lists **Fast Startup** under *"The following sleep states are available on this system"*, and
+- `HiberbootEnabled` is `0x1`.
+
+If `powercfg /a` lists it under *"not available"* (e.g. *"Hibernation has not been enabled"*), or `HiberbootEnabled` is `0x0`, it's already off.
+
+**Turn it off:**
 
 ```powershell
 powercfg /h off
 ```
 
-(This also turns off hibernation. Sleep still works normally.)
+This turns off hibernation (and with it Fast Startup) and deletes `hiberfil.sys`, freeing several GB. Sleep still works normally. Run the check again: Fast Startup should now be under *"not available"*.
+
+**Turn it back on later** (optional, e.g. after you're done with Linux):
+
+```powershell
+powercfg /h on
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 1 /f
+```
+
+The first line re-enables hibernation; the second makes sure the Fast Startup switch itself is on (it usually already is, so this is harmless).
 
 ### 2.3 Update the firmware (recommended)
 
@@ -493,7 +519,7 @@ Because nothing was installed on the internal disk, undoing is simple:
 2. **Reuse the USB drive:** in Windows, open **Disk Management** (right-click Start), right-click each partition **on the USB drive** → **Delete Volume**, then right-click the empty space → **New Simple Volume** → NTFS or exFAT. *(Double-check the disk number and size so you're working on the USB drive, not Disk 0.)*
 3. **If Windows Boot Manager isn't first in the boot order:** press `F2` at power-on → **Boot** → move it to the top → **Save & Exit**.
 4. **If there's an `ubuntu` folder on the internal EFI partition** (Step 7.2) and you want it gone: in an admin terminal, run `bcdedit /enum firmware` to see whether an "ubuntu" entry exists. It's harmless to leave it. If you want it removed, ask for help instead of deleting EFI files by hand.
-5. **Optional:** turn Fast Startup back on with `powercfg /h on` (admin terminal).
+5. **Optional:** turn Fast Startup back on (see the commands at the end of Step 2.2).
 
 ---
 
