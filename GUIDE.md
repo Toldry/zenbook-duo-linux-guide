@@ -49,6 +49,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [8.4 Re-run the hardware checklist](#84-re-run-the-hardware-checklist)
    - [8.5 Keep the session on GNOME + Wayland](#85-keep-the-session-on-gnome--wayland)
 9. [Everyday use: switching between Windows and Linux](#9-everyday-use-switching-between-windows-and-linux)
+   - [Battery care if Ubuntu becomes your main OS](#battery-care-if-ubuntu-becomes-your-main-os)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -578,6 +579,32 @@ Check with `echo $XDG_SESSION_TYPE` (it should print `wayland`). If there's no g
 - 🔋 **Always do a full Shut Down (not Restart) when switching from Windows to Ubuntu.** The speaker amplifiers only start cleanly in Linux after a real power-off.
 - 🔄 **Keep both systems updated.** If a Windows update ever makes the USB drive stop booting, see Troubleshooting.
 - 💾 **Back up the USB drive.** Flash drives fail without warning. Ubuntu has a built-in **Backups** app (Déjà Dup).
+
+### Battery care if Ubuntu becomes your main OS
+
+Linux doesn't harm the battery by itself. The risks come from things Windows does for you that Ubuntu doesn't:
+
+**1. Set a charge limit. Ubuntu charges to 100% by default.**
+In Windows, MyASUS's *Battery Health Charging* caps charging (e.g. at 80%) and re-applies the cap at every boot. Under Linux the limit is 100%, and it resets on every reboot. A battery that sits at 100% while plugged in all day wears out noticeably faster. On the installed system, with the add-on from [8.3](#83-install-the-zenbook-duo-add-on):
+
+```bash
+cd ~/linux-on-zenbook-duo
+./install.sh --battery-limit 80
+cat /sys/class/power_supply/BAT0/charge_control_end_threshold    # should print 80
+```
+
+This re-applies the limit every time you log in. It may not hold before login, or while the laptop is off and charging, so the battery can occasionally go above 80%. That's fine.
+
+**2. Expect shorter runtime per charge.** This doesn't wear the battery; you just get less time per charge than on Windows:
+- The OLED flicker fix (turning off Panel Self Refresh) costs some idle power.
+- Windows has Intel's and ASUS's power tuning; Ubuntu uses generic defaults. Choose **Power Saver** in the top-right menu when you're on battery.
+- Sleep is the lighter "s2idle" kind and drains more overnight than Windows sleep. Shut down instead (also see the sleep tip above).
+
+**3. Boot Windows now and then for firmware updates.** BIOS and embedded-controller updates, which sometimes include battery and charging fixes, only come through **MyASUS** in Windows ([2.3](#23-update-the-firmware-recommended)). Check every month or two.
+
+**4. Don't add TLP or auto-cpufreq.** Ubuntu's built-in power management (`power-profiles-daemon`) already does the job. Those tools conflict with it, and TLP's own charge-limit setting can fight the add-on's. One tool per job.
+
+Fans and heat aren't a battery risk: the laptop's embedded controller runs the fans, not the OS.
 
 ---
 
