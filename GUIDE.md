@@ -114,7 +114,7 @@ You'll do it in two parts:
 
 ### Know your model
 
-In Windows, press `Win + R`, type `msinfo32`, and press Enter. Look at **System Model**:
+In Windows, press `Win + R`, type `msinfo32`, and press Enter. Look at **System Model**. It may show the code twice, e.g. `ASUS Zenbook Duo UX8406MA_UX8406MA`; only the code matters:
 
 - `UX8406MA` = 2024 model (Intel Core Ultra "Meteor Lake"): the best-tested model on Linux.
 - `UX8406CA` = 2025 model (Intel Core Ultra "Arrow Lake"): works, but less tested.
