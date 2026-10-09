@@ -145,6 +145,10 @@ You do this in the Google Cloud Console, Google's site for developers. You don't
    3. **Save.**
    4. Go to **Audience → Publish app → Confirm**. The publishing status changes to **In production**.
 
+      The confirmation box sounds alarming, but it's expected:
+      - *"Your app will be available to any user with a Google Account"* means anyone **could** sign in to your app, and only ever to give it access to **their own** Drive. It never gives anyone access to yours. In practice nobody else knows your client ID or has a reason to use it.
+      - *"…requests sensitive or restricted scopes, you will need to submit for verification"* applies, because full Drive access is a "restricted" scope. You don't have to do it, though: without verification the app keeps working for up to 100 users and shows the *"Google hasn't verified this app"* warning at sign-in. Verification only matters for apps offered to the public.
+
    You do **not** need to submit the app for Google's verification review. Unverified, it's limited to 100 users, which is plenty for one person, and Google shows a *"Google hasn't verified this app"* warning when you sign in (see Step 2).
 
    > **Already connected rclone while the app was in *Testing*?** That sign-in still expires after 7 days. Sign in once more, now that the app is published: `rclone config reconnect gdrive:`.
