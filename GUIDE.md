@@ -569,6 +569,17 @@ This copies the Secure-Boot-signed boot files to the generic location `\EFI\BOOT
 2. Tap **`Esc`** → pick the USB drive (**UEFI: <drive name>**). (**Windows → Settings → Recovery → Advanced startup → Use a device** also works, but it can leave the speakers silent; see the warning in [4.1](#41-boot-from-the-usb-stick).)
 3. If you set a Secure Boot password in 6.3, a **blue "Perform MOK management" screen** appears the first time: choose **Enroll MOK → Continue → Yes**, type the password, then **Reboot**.
 4. Log in with the account you created.
+5. A **welcome wizard** appears the first time. Its screens:
+   - **Ubuntu Pro:** choose **Skip for now** (see below).
+   - **Help improve Ubuntu** (sends a hardware and usage report): your choice. *No* is fine.
+   - **Location services** and **privacy** settings: your choice.
+
+> **What's Ubuntu Pro, and why skip it?** Ubuntu's main software (the *main* repository: the system itself, the kernel, Firefox, LibreOffice and so on) gets free security updates for 5 years (until 2029 for 24.04) **without** Pro. Pro adds:
+> - security fixes for the large *universe* repository of community-maintained packages
+> - 10 years of support instead of 5
+> - **Livepatch**, which applies kernel security fixes without a reboot
+>
+> It's free for personal use on up to 5 machines, but it needs an **Ubuntu One account**. For a laptop that reboots daily and will move to a newer Ubuntu within 5 years, it adds little. If you change your mind later, sign up at <https://ubuntu.com/pro> and run `sudo pro attach <your-token>`. You can also turn it on from the **Software & Updates** app.
 
 ### 8.2 Update everything
 
