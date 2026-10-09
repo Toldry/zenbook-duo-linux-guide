@@ -48,7 +48,9 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [8.3 Install the Zenbook Duo add-on](#83-install-the-zenbook-duo-add-on)
    - [8.4 Re-run the hardware checklist](#84-re-run-the-hardware-checklist)
    - [8.5 Keep the session on GNOME + Wayland](#85-keep-the-session-on-gnome--wayland)
+   - [8.6 Make the speakers sound like Windows (optional)](#86-make-the-speakers-sound-like-windows-optional)
 9. [Everyday use: switching between Windows and Linux](#9-everyday-use-switching-between-windows-and-linux)
+   - [Boot Ubuntu automatically when the drive is plugged in (optional)](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional)
    - [Battery care if Ubuntu becomes your main OS](#battery-care-if-ubuntu-becomes-your-main-os)
    - [Moving Ubuntu to the internal disk later](#moving-ubuntu-to-the-internal-disk-later)
 10. [Troubleshooting](#10-troubleshooting)
@@ -81,7 +83,7 @@ This is what the result looks like:
         └──────────  USB plugged in + boot menu → Ubuntu
 ```
 
-**The "dual-boot" switch is physical:** USB plugged in and picked from the boot menu means Ubuntu. Anything else means Windows, exactly as before.
+**The "dual-boot" switch is physical:** USB plugged in and picked from the boot menu means Ubuntu. Anything else means Windows, exactly as before. (Once everything works, [section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional) shows how to make "plugged in" enough on its own, without the boot menu.)
 
 > ### 🧪 Doing a quick feasibility test with one small stick (e.g. 16 GB USB-A)?
 >
@@ -207,6 +209,8 @@ Do this even though Windows isn't supposed to be touched. OneDrive, an external 
 Go to <https://ubuntu.com/download/desktop> and download **Ubuntu 24.04 LTS** (the newest 24.04.x point release, e.g. 24.04.4).
 
 > **Why 24.04, not a newer version?** The main Duo add-on ([JowiAoun/linux-on-zenbook-duo](https://github.com/JowiAoun/linux-on-zenbook-duo)) is tested on **Ubuntu 24.04.4 with GNOME on Wayland**. Recent 24.04.x releases also ship kernel **6.11 or newer**, which fixes Wi-Fi switching off when you lift the keyboard. On a 2025 model (UX8406CA), a newer Ubuntu (25.10 / 26.04) is also fine. The [Fmstrat](https://github.com/Fmstrat/zenbook-duo-linux) add-on has been confirmed on 25.10.
+>
+> **Ubuntu 26.04 on the 2024 model also works.** A UX8406MA running Ubuntu 26.04.1 (kernel 7.0, GNOME 50) with JowiAoun's add-on 0.9.0 passed `duo-cli doctor` with only the two warnings that are expected anyway ([8.3](#83-install-the-zenbook-duo-add-on)). One add-on command, `duo layout login`, doesn't work there yet; see [Troubleshooting](#10-troubleshooting). Installer screens in 26.04 may differ slightly from the 24.04 ones described in Step 6.
 
 The file is about 6 GB and ends in `.iso`.
 
@@ -260,7 +264,7 @@ Nothing in this step writes to the laptop's internal disk.
 
 > ⚠️ **Method 2 can leave the speakers completely silent in Linux.** It's a *restart* from Windows, so the speaker amplifiers are never powered off, and Linux can't start them (`sudo dmesg | grep -i cs35l41` shows `Failed waiting for CS35L41_PUP_DONE_MASK: -110`). If that happens, power off from Ubuntu and boot again with Method 1. Prefer Method 1 whenever you want to test or use sound.
 
-> **Do not change the permanent boot order in the UEFI settings, and do not turn off Secure Boot.** The one-time boot menu leaves everything else as it was, which is the safest choice for BitLocker. Ubuntu works with Secure Boot on.
+> **Do not change the permanent boot order in the UEFI settings, and do not turn off Secure Boot.** The one-time boot menu leaves everything else as it was, which is the safest choice for BitLocker. Ubuntu works with Secure Boot on. (Once Ubuntu is installed and working, [section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional) describes an optional, reversible boot-order change that starts Ubuntu automatically whenever its drive is plugged in.)
 
 ### 4.2 Start the live session
 
@@ -295,7 +299,7 @@ Work through this list and record the results. They'll help you decide in Step 5
 | 8 | Wi-Fi after lifting keyboard | Check whether Wi-Fi stays connected | ✅ Should stay on (kernel 6.11+). If it drops, your kernel is too old. | |
 | 9 | Pair keyboard over Bluetooth | **Settings → Bluetooth**, keyboard off the laptop, **hold `F10` for 4–5 s** until the light blinks blue quickly, then pick it in the list | ✅ Pairs | |
 | 10 | Fn keys (brightness/volume) | Press them while docked | ⚠️ Often don't work (the add-on fixes this) | |
-| 11 | Speakers | Play a YouTube video | ⚠️ Works but sounds flatter than on Windows. **Completely silent** → you probably booted with Method 2; see the warning in [4.1](#41-boot-from-the-usb-stick) | |
+| 11 | Speakers | Play a YouTube video | ⚠️ Works but sounds flatter and quieter than on Windows ([8.6](#86-make-the-speakers-sound-like-windows-optional) fixes this). **Completely silent** → you probably booted with Method 2; see the warning in [4.1](#41-boot-from-the-usb-stick) | |
 | 12 | Screen flicker | Watch the OLED for a minute | ⚠️ May flicker (the add-on turns off "Panel Self Refresh") | |
 | 13 | Webcam | Open the **Cheese** app if available | Usually ✅ | |
 
@@ -594,6 +598,11 @@ After rebooting, confirm the kernel version:
 uname -r      # must be 6.11 or higher
 ```
 
+Two messages you may see from `apt`, both normal:
+
+- **"Not upgrading yet due to phasing"**: Ubuntu releases many updates to a random share of machines first, then widens the rollout over a few days, so a bad update can be stopped early. Yours arrive on their own; don't force them.
+- **"…were automatically installed and are no longer required"**, listing an older `linux-image-…`: a kernel left over from before the upgrade. Once the new kernel has booted fine, `sudo apt autoremove` removes it.
+
 ### 8.3 Install the Zenbook Duo add-on
 
 For the **2024 model (UX8406MA)**, use JowiAoun's project:
@@ -612,6 +621,19 @@ Then reboot. The installer is safe to run more than once ("idempotent"), so if s
 
 What it changes, so you know what you're agreeing to: it installs a few packages from Ubuntu's repositories, the HWE and standard kernels, the `i915.enable_psr=0` boot option (in the USB drive's own GRUB), the `duo` commands under `/usr/local`, a udev rule, a touchpad quirk, a speaker-amp *reporter* that only reads the kernel log, and a **sudoers rule** that lets your account run one small helper as root without a password. That helper only accepts three checked commands: set a backlight level, set a battery charge limit, and copy your display layout to the login screen. It downloads nothing at install time besides Ubuntu packages, and never touches the internal disk. `./uninstall.sh` removes all of it.
 
+**Check the result.** After the reboot, run `bin/duo-cli doctor` again with the keyboard **docked**. On a working install, everything is `OK` or `info` except these two warnings, which stay and are harmless:
+
+- `hid_asus not bound to 0b05:1b2c`: the kernel still has no entry for this keyboard. As long as `feature watch-fn` shows `installed enabled active`, the add-on covers the Fn keys.
+- `asus_wmi: fan_curve_get_factory_default … failed: -19` in the kernel log: this model has no custom fan curves (see [4.4](#44-run-the-read-only-duo-doctor-check)).
+
+The `i915 … Selective fetch` line from Part A should be gone, because the flicker fix turns off the feature that causes it. Lines worth seeing: `cmdline has i915.enable_psr=0`, `panel eDP-2: connected (enabled: disabled)` while docked (the dock policy works), `each panel's own digitizer is pinned to it`, and `CS35L41 speaker amps powered up cleanly this boot`.
+
+**Optional extras** (`duo features` lists what's on):
+
+- `duo enable watch-backlight`: keeps the bottom screen's brightness in step with the top one when the keyboard is off. It's off by default.
+- `watch-rotation` is experimental and only logs the orientation sensor; it doesn't rotate anything. Leave it off.
+- `duo layout login` copies your screen layout to the login screen. On Ubuntu 26.04 it fails for now; see [Troubleshooting](#10-troubleshooting).
+
 For the **2025 model (UX8406CA)**, use [Fmstrat/zenbook-duo-linux](https://github.com/Fmstrat/zenbook-duo-linux) instead and follow its README. JowiAoun's project says the 2025 model is *likely* compatible but untested.
 
 > Before you run any script from the internet, it's good practice to at least skim it. Open `install.sh` in the Text Editor first. You don't need to understand every line, just make sure it's what the README describes.
@@ -623,7 +645,7 @@ Go back to the table in [Step 4.3](#43-hardware-test-checklist). Items 4, 7, 10,
 - Bottom screen turns off when the keyboard is laid on it, and on when it's lifted
 - Touch on the bottom screen hits the bottom screen
 - Fn keys and keyboard backlight work
-- Speakers sound fuller
+- Speakers start cleanly after a full shut down (for Windows-like sound, see [8.6](#86-make-the-speakers-sound-like-windows-optional); the add-on doesn't change how they sound)
 - No OLED flicker
 
 ### 8.5 Keep the session on GNOME + Wayland
@@ -631,6 +653,56 @@ Go back to the table in [Step 4.3](#43-hardware-test-checklist). Items 4, 7, 10,
 On the login screen, a gear icon (bottom-right, after clicking your name) lets you pick the session. Keep it on **Ubuntu** (Wayland), **not "Ubuntu on Xorg"**. The display features of the add-on need GNOME on Wayland.
 
 Check with `echo $XDG_SESSION_TYPE` (it should print `wayland`). If there's no gear and it prints `x11`, Wayland is turned off in the login screen's settings. Run `grep -i wayland /etc/gdm3/custom.conf`. If that shows `WaylandEnable=false` without a `#` in front, fix it the same way as in [4.2](#42-start-the-live-session), step 4, then log out and back in.
+
+### 8.6 Make the speakers sound like Windows (optional)
+
+On Windows, the Realtek audio driver runs Dolby processing tuned by ASUS for this laptop's speakers: a speaker-correction curve, some treble and voice lift, extra loudness and a limiter that keeps it from distorting. Ubuntu sends the plain signal to the same speakers, so they sound thin and quiet. The tuning is stored in an XML file inside the Windows driver, and [speaker-tuning-to-easyeffects](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects) rebuilds it as presets for **EasyEffects**, a Linux app that processes all sound before it reaches the speakers.
+
+On a UX8406MA it matched the file `DEV_0294_SUBSYS_10431C43_PCI_SUBSYS_1C431043.xml`: the Realtek ALC294 codec and this laptop's ID. That's ASUS's own tuning for this model, not a generic preset.
+
+> This fixes **thin or quiet** sound only. Speakers that sound **crackly or distorted**, even with EasyEffects bypassed, have the amplifier start-up problem instead; see [Troubleshooting](#10-troubleshooting).
+
+1. **Make the Windows files readable.** Open **Files**; the Windows partition is in the sidebar (often called *OS*). Click it and enter your **Ubuntu** password when asked; Ubuntu asks for it before opening any internal-disk partition.
+   - If Ubuntu asks for a BitLocker **recovery key** instead, `C:` is BitLocker-protected. Then copy the driver folder from Windows onto a USB stick instead (PowerShell; replace `E:` with the stick's drive letter), and plug the stick in on Ubuntu:
+     ```powershell
+     New-Item -ItemType Directory "E:\dax3"
+     Copy-Item -Recurse "C:\Windows\System32\DriverStore\FileRepository\dax3_ext_*" -Destination "E:\dax3"
+     ```
+2. **Install EasyEffects and the tool:**
+   ```bash
+   sudo apt install easyeffects python3-numpy python3-scipy python3-rich python3-rich-argparse
+   apt policy easyeffects      # the tool needs EasyEffects 8.x
+   git clone https://github.com/antoinecellerier/speaker-tuning-to-easyeffects ~/speaker-tuning-to-easyeffects
+   ```
+   Ubuntu 26.04's package worked. If `apt policy` shows a version below 8 (likely on 24.04), install EasyEffects from [Flathub](https://flathub.org/apps/com.github.wwmm.easyeffects) instead, and check the tool's README for that case.
+3. **Build the presets** (without `sudo`; the tool refuses to run as root):
+   ```bash
+   cd ~/speaker-tuning-to-easyeffects
+   python3 dolby_to_easyeffects.py --speaker-info     # shows the codec, e.g. Realtek ALC294
+   python3 dolby_to_easyeffects.py --autoload
+   ```
+   It finds the mounted Windows partition by itself. Look for `Matched tuning XML: …DEV_0294_SUBSYS_10431C43…` and `Correction check passed`. It writes three presets, **Dolby-Balanced**, **Dolby-Detailed** and **Dolby-Warm** (the same three choices as Windows' Dolby app), and loads *Balanced* automatically for the built-in speakers only. Headphones and HDMI stay unprocessed, which is correct.
+   - From a USB stick (step 1), pass the file instead: `python3 dolby_to_easyeffects.py <stick>/dax3/<folder>/DEV_0294_SUBSYS_10431C43*.xml --autoload`, where `<stick>` is where Ubuntu mounted it (`/media/$USER/<name>`, or `/run/media/$USER/<name>` on 26.04).
+4. **Keep it running:** open EasyEffects → **Preferences → Background Service** → turn on **Autostart on login**. Without it, the tuning only works while the EasyEffects window is open.
+5. **Compare:** play music and toggle EasyEffects' global bypass button. The tuned sound should be clearly fuller and louder.
+6. **Unmount the Windows partition** in Files (the eject icon). The presets live in `~/.local/share/easyeffects/` now.
+
+**Match the mode you used on Windows (optional).** Dolby's tuning file has 9 sound modes, and the tool picks *dynamic* by default. To see which one Windows uses, open the **Dolby Access** app on Windows (Start → type *Dolby*), with the built-in speakers as the output: the highlighted profile (*Dynamic*, *Movie*, *Music*, *Game*, *Voice*…) is the mode, and *Intelligent Equalizer* shows Balanced, Detailed or Warm. Then, with the Windows partition mounted again:
+
+```bash
+python3 dolby_to_easyeffects.py --list                       # names of the 9 modes
+python3 dolby_to_easyeffects.py --profile <name> --autoload
+```
+
+Windows' *Dynamic* switches modes depending on what's playing; the Linux preset can't, so it stays on one sound. Go by ear.
+
+**If something sounds off,** run the same command again with one of these added, then reload the preset in EasyEffects:
+
+| Flag | Use it when |
+|---|---|
+| `--disable high-shelf` | "s" sounds and cymbals are piercing (this filter hasn't been checked by ear on any device yet) |
+| `--disable volmax` | Loud music sounds crushed (it removes the +6 dB loudness boost) |
+| `--disable dialog` | Voices sound too forward |
 
 ---
 
@@ -642,13 +714,69 @@ Check with `echo $XDG_SESSION_TYPE` (it should print `wayland`). If there's no g
 | **Ubuntu** | Plug in the USB drive → power on **from off** → tap **`Esc`** → pick the USB drive. |
 | **Ubuntu, from inside Windows** | **Shut Down** Windows, then do the row above. (Advanced startup → **Use a device** is a restart and can leave the speakers silent.) |
 
+With the optional automatic boot ([below](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional)), the `Esc` step goes away: plugged in means Ubuntu, unplugged means Windows.
+
 **Rules of thumb:**
 
 - 🔌 **Never unplug the USB drive while Ubuntu is running.** It's like pulling the hard drive out of a running PC. Shut down first.
 - 💤 **Prefer shutting down over sleep in Ubuntu.** Sleeping with the OS on a USB drive works on most setups but is the most likely place for glitches. Test it a few times before you trust it.
-- 🔋 **Always do a full Shut Down (not Restart) when switching from Windows to Ubuntu.** The speaker amplifiers only start cleanly in Linux after a real power-off.
+- 🔋 **Always do a full Shut Down (not Restart) when switching from Windows to Ubuntu.** The speaker amplifiers only start cleanly in Linux after a real power-off. That only works while Fast Startup stays off, and big Windows updates have been known to switch it back on. If the speakers start sounding distorted again, re-check with `powercfg /a` ([2.2](#22-turn-off-fast-startup)).
 - 🔄 **Keep both systems updated.** If a Windows update ever makes the USB drive stop booting, see Troubleshooting.
 - 💾 **Back up the USB drive.** Flash drives fail without warning. Ubuntu has a built-in **Backups** app (Déjà Dup).
+
+### Boot Ubuntu automatically when the drive is plugged in (optional)
+
+The laptop's firmware keeps a list of boot entries and tries them in order (the *boot order*). An entry whose drive isn't connected is skipped. So if Ubuntu's entry comes **first** and *Windows Boot Manager* **second**, the drive itself becomes the switch:
+
+```mermaid
+flowchart TD
+    A[Power on] --> B{Ubuntu drive<br/>plugged in?}
+    B -- yes --> C["1st entry: ubuntu<br/>(GRUB on the USB drive)"] --> D[Ubuntu]
+    B -- no --> E["1st entry skipped<br/>2nd entry: Windows Boot Manager"] --> F[Windows]
+```
+
+This changes a setting in the laptop's firmware, not anything on the internal disk, and it's undone with one command. Do it from the installed Ubuntu, after [Step 7.3](#73-make-the-usb-drive-boot-on-its-own-recommended).
+
+> **BitLocker:** if `C:` is BitLocker-protected ([2.1](#21-save-your-bitlocker-recovery-key)), a boot-order change *can* make Windows ask for the recovery key once. Have the key at hand.
+
+1. **List the boot entries:**
+   ```bash
+   sudo efibootmgr -v
+   ```
+   Example (shortened):
+   ```
+   BootCurrent: 0003
+   BootOrder: 0000,0003,0001
+   Boot0000* Windows Boot Manager  HD(1,GPT,1c2d…,…)/\EFI\Microsoft\Boot\bootmgfw.efi
+   Boot0003* ubuntu                HD(1,GPT,7a9e…,…)/\EFI\ubuntu\shimx64.efi
+   Boot0001* UEFI: ORICO …
+   ```
+2. **Find the `ubuntu` entry that points to the USB drive.** Print the ID of the USB drive's EFI partition:
+   ```bash
+   lsblk -no PARTUUID "$(findmnt -no SOURCE /boot/efi)"
+   ```
+   The `ubuntu` entry whose `HD(1,GPT,…)` contains that same ID is the right one (upper/lower case doesn't matter). If there are two `ubuntu` entries, the other one points to a stray copy on the internal disk (see [7.2](#72-check-the-internal-efi-partition-for-stray-ubuntu-files-optional)). **Never put that one first**, or you'll get a `grub>` prompt whenever the drive is unplugged.
+3. **Set the new order:** the USB `ubuntu` entry, then *Windows Boot Manager*, then the rest of the old `BootOrder` unchanged. With the example numbers:
+   ```bash
+   sudo efibootmgr -o 0003,0000,0001
+   ```
+4. **Test all three cases**, each time starting from **off**:
+
+   | Test | Expected |
+   |---|---|
+   | Drive plugged in → power on | Ubuntu starts |
+   | Shut down, unplug → power on | Windows starts |
+   | Shut down Windows, plug in → power on | Ubuntu starts again |
+
+   Then run `sudo efibootmgr` once more: `BootOrder` should still start with the `ubuntu` entry. The third test matters: some ASUS firmware drops or reorders entries for drives that were missing at boot. If it did, set the order in the firmware instead: `F2` at power-on → `F7` (Advanced Mode) → **Boot** → **Boot Option #1** = the USB drive, with the drive plugged in → **Save & Exit**. If the drive is ignored at boot even then, try turning off **Fast Boot** on the same tab.
+
+**Living with it:**
+
+- **To start Windows with the drive plugged in:** tap `Esc` at power-on and pick *Windows Boot Manager*.
+- **Restart in Windows now lands in Ubuntu** if the drive is plugged in. That's a warm start, so the speakers may not work; switching from Windows still means **Shut Down**.
+- **Unplug the drive while Windows installs updates.** Windows Update restarts several times, and each restart would otherwise go to Ubuntu. The update just waits for the next Windows start, but it's annoying.
+- **A Windows update may put Windows Boot Manager back on top.** Then the drive needs `Esc` again; repeat step 3.
+- **To undo:** `sudo efibootmgr -o` with *Windows Boot Manager* first (e.g. `0000,0003,0001`), or `F2` → **Boot** → move *Windows Boot Manager* to the top.
 
 ### Battery care if Ubuntu becomes your main OS
 
@@ -699,7 +827,11 @@ Once Ubuntu works well from the USB drive, you may want it on the internal SSD n
 | Palm rejection doesn't work right after installing the add-on | The desktop reads touchpad quirks only when it starts | Log out and back in |
 | Session is "Ubuntu on Xorg" and there's no gear on the login screen | `WaylandEnable=false` in `/etc/gdm3/custom.conf` | See [4.2](#42-start-the-live-session), step 4 |
 | Second screen black after an update | A kernel regression (happened once in 2024) | At the GRUB menu, pick **Advanced options for Ubuntu** → the **previous** kernel |
-| Speakers **silent**, or harsh/distorted; `sudo dmesg \| grep -i cs35l41` shows `Failed waiting for CS35L41_PUP_DONE_MASK: -110` | The speaker amplifiers weren't powered off before Linux started: you restarted from Windows (Advanced startup → Use a device), or Fast Startup is on | Power off from Ubuntu (or **Shut Down** Windows), then boot with **`Esc`**. Make sure Fast Startup is off ([2.2](#22-turn-off-fast-startup)). Don't try to fix it by reloading drivers; that makes it worse |
+| Speakers **silent**, or harsh/distorted; `sudo dmesg \| grep -i cs35l41` shows `Failed waiting for CS35L41_PUP_DONE_MASK: -110` | The speaker amplifiers weren't powered off before Linux started: you restarted from Windows (Advanced startup → Use a device), or Fast Startup is on | Power off from Ubuntu (or **Shut Down** Windows), then boot with **`Esc`**. Make sure Fast Startup is off ([2.2](#22-turn-off-fast-startup)); if you'd already turned it off, check with `powercfg /a` whether a Windows update turned it back on. Don't try to fix it by reloading drivers; that makes it worse. Check a given boot with `journalctl -k -b \| grep -i cs35l41`, or `duo doctor`'s audio section |
+| Sound problems even though you **did** Shut Down, and the log has no `PUP_DONE` line | Not the amplifier start-up problem | Thin or quiet: see the next row. Crackling or silent, even with EasyEffects bypassed: ask in the add-on's issues with your `duo doctor` output |
+| Speakers sound thin or quiet compared with Windows | Ubuntu doesn't have the Dolby tuning that Windows applies | Rebuild it from the Windows driver: [8.6](#86-make-the-speakers-sound-like-windows-optional). For loudness alone: **Settings → Sound → Over-Amplification** (can distort near the top) |
+| `duo layout login` says `monitors.xml has an unknown element <layoutmode> — refusing` | GNOME 50 (Ubuntu 26.04) writes a newer display-settings file than add-on 0.9.0's helper accepts. It refuses on purpose, because it runs as root | Harmless: only the login screen's screen layout is affected, and the dock policy takes over once you log in. Ignore it until the add-on is updated |
+| Laptop starts Ubuntu when you wanted Windows | You set up the automatic boot ([section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional)), and the drive is plugged in | Tap `Esc` at power-on → *Windows Boot Manager*, or unplug the drive |
 | Live session stuck at *"Please remove the installation medium, then press ENTER"*; no keyboard responds | Ubuntu has already shut down, and the keyboard drivers are gone | **Hold the power button for about 10 seconds.** Safe at this point |
 | **Bottom screen not detected in Windows** (Device Manager → View → Show hidden devices → Monitors shows a greyed-out *MyASUS_Splendid*). Restarts and `Win + Ctrl + Shift + B` don't help | The laptop's embedded controller (the always-on chip that manages power) kept the bottom panel switched off, typically after a forced power-off | **Embedded-controller reset:** shut down, **unplug the charger**, **detach the keyboard** (not resting on the screen), **hold the power button for 40 seconds** (keep holding even if it turns on), release, plug the charger back in, power on |
 | Ubuntu very slow | The USB drive is too slow | Use an external SSD on a USB-C port |
@@ -729,6 +861,10 @@ Because nothing was installed on the internal disk, undoing is simple:
 
 - [JowiAoun/linux-on-zenbook-duo](https://github.com/JowiAoun/linux-on-zenbook-duo): install commands, `duo-cli doctor`, kernel ≥ 6.11 and Fast Startup warnings, tested on Ubuntu 24.04.4. Its [`system/46-speaker-amp.sh`](https://github.com/JowiAoun/linux-on-zenbook-duo/blob/main/system/46-speaker-amp.sh) documents the CS35L41 speaker-amp failure and why a cold power-off is the fix
 - Hands-on test on a UX8406MA with an Ubuntu 24.04.5 live session (kernel 7.0), October 2026: the boot-method speaker problem, the live image's Wayland setting, the live-session add-on test, and the embedded-controller reset
+- Hands-on install of Ubuntu 26.04.1 (kernel 7.0, GNOME 50) on an external SSD, on a UX8406MA with add-on 0.9.0, October 2026: the `duo doctor` results before and after the install, the `duo layout login` failure, and the Dolby tuning match (Realtek ALC294, `DEV_0294_SUBSYS_10431C43`)
+- [antoinecellerier/speaker-tuning-to-easyeffects](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects): rebuilds the Windows Dolby speaker tuning as EasyEffects presets; [`docs/getting-the-xml.md`](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects/blob/master/docs/getting-the-xml.md) covers where the XML lives
+- [Ubuntu Server docs: phased updates](https://ubuntu.com/server/docs/about-apt-upgrade-and-phased-updates): why `apt` holds some updates back
+- [`efibootmgr` manual](https://manpages.ubuntu.com/manpages/noble/man8/efibootmgr.8.html): listing boot entries and setting the boot order
 - [Fmstrat/zenbook-duo-linux](https://github.com/Fmstrat/zenbook-duo-linux): 2025 model (UX8406CA) support
 - [alesya-h/zenbook-duo-2024-ux8406ma-linux](https://github.com/alesya-h/zenbook-duo-2024-ux8406ma-linux/): the original scripts
 - [asusctl issue #25](https://github.com/flukejones/asusctl/issues/25): developer discussion

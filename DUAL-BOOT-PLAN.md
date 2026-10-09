@@ -150,7 +150,7 @@ Goal: prove that daily life on Ubuntu works, and that the installer can do what 
    - It should use the **unallocated space** and the **existing ESP**.
    - On the summary screen: nothing from Windows (`C:`, Recovery) may be marked *formatted*. Only the new Ubuntu partition, and the ESP marked *used*, not formatted.
 3. Choose a strong **encryption passphrase**. Write it down where your BitLocker key would have gone.
-4. Finish, reboot, and run [GUIDE.md](GUIDE.md) steps 8.2–8.5: updates, the add-on, Wayland. Also do the battery limit from section 9.
+4. Finish, reboot, and run [GUIDE.md](GUIDE.md) steps 8.2–8.6: updates, the add-on, Wayland, and the Windows speaker tuning. Also do the battery limit from section 9. For 8.6, the decrypted `C:` on the same disk is where the tool finds the Dolby file.
 5. **Check the boot menu.** GRUB should list *Windows Boot Manager*. If it doesn't:
    ```bash
    echo 'GRUB_DISABLE_OS_PROBER=false' | sudo tee -a /etc/default/grub
@@ -175,12 +175,13 @@ Goal: prove that daily life on Ubuntu works, and that the installer can do what 
    Re-install apps rather than copying them.
 2. **Set up Google Drive sync and Cryptomator again** on the internal Ubuntu, the same way as in Phase 1.
 3. **Use it for a week before wiping the external SSD.** Then either wipe it, or keep it as a backup drive (Déjà Dup can back up to it).
+   - If you'd set up the automatic USB boot ([GUIDE.md](GUIDE.md), section 9), check `sudo efibootmgr`: the internal Ubuntu's entry must come before the external drive's. The installer normally puts its own entry first. An entry for a wiped or unplugged drive is just skipped, so it's harmless to leave.
 
 ✅ **Done.**
 
 ## Everyday rules after the move
 
-- **Windows → Ubuntu: always Shut Down, never Restart.** Otherwise the speaker amplifiers may not start ([GUIDE.md](GUIDE.md), 4.1).
+- **Windows → Ubuntu: always Shut Down, never Restart.** Otherwise the speaker amplifiers may not start ([GUIDE.md](GUIDE.md), 4.1). After big Windows updates, check that Fast Startup is still off (`powercfg /a`, GUIDE.md 2.2).
 - **Shut down rather than sleep when travelling.** Encryption only protects a laptop that's off.
 - **Boot Windows every month or two** for MyASUS firmware updates and Windows Update. Allow an hour.
 - **Keep Ubuntu updated.** A Windows Secure Boot update can block an outdated Ubuntu boot loader; an up-to-date one is fine. Keep the installer stick for repairs.
@@ -198,7 +199,7 @@ Goal: prove that daily life on Ubuntu works, and that the installer can do what 
 
 | Point | Confidence | What to do |
 |---|---|---|
-| The 24.04 installer offers encryption with *Install alongside Windows* | ~60% | Check in Phase 1, step 4. If not: the newer **Ubuntu 26.04 LTS** installer may (released April 2026, ~85% sure), but the Duo add-on is tested on 24.04. Or set up LUKS by hand from a terminal before installing; that's an advanced procedure, so get help |
+| The 24.04 installer offers encryption with *Install alongside Windows* | ~60% | Check in Phase 1, step 4. If not: the newer **Ubuntu 26.04 LTS** installer may (released April 2026, ~85% sure). The add-on's README only lists 24.04 as tested, but 26.04.1 with add-on 0.9.0 passed `duo doctor` on a UX8406MA in October 2026 (GUIDE.md, 3.1). Or set up LUKS by hand from a terminal before installing; that's an advanced procedure, so get help |
 | Windows Home can activate BitLocker with `manage-bde` without a Microsoft account | ~50% | Not needed by this plan, since `C:` holds no sensitive data |
 | `defrag C: /L` (TRIM) makes deleted files unrecoverable on this SSD | ~70% | Good enough against a thief; not a forensic-grade wipe |
 | Cryptomator Android is a one-time purchase of ~€15–20 | ~70% | Check the Play Store |
