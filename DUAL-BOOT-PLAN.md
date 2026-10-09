@@ -93,6 +93,8 @@ Google makes no Drive desktop app for Linux. Options:
 | **Insync** | Paid app (one-time licence) | Closest to the Windows Drive app |
 | GNOME **Online Accounts** | Built into Ubuntu | Browse-only, no offline copies. Fine for occasional access |
 
+Step-by-step setup for each: [CLOUD-STORAGE.md](CLOUD-STORAGE.md).
+
 **Ubuntu's encryption protects only while the laptop is off.** While asleep, the disk is unlocked in memory. When travelling, shut down.
 
 ---

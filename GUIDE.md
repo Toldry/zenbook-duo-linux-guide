@@ -51,6 +51,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
 9. [Everyday use: switching between Windows and Linux](#9-everyday-use-switching-between-windows-and-linux)
    - [Battery care if Ubuntu becomes your main OS](#battery-care-if-ubuntu-becomes-your-main-os)
    - [Moving Ubuntu to the internal disk later](#moving-ubuntu-to-the-internal-disk-later)
+   - [Google Drive and Proton Drive](#google-drive-and-proton-drive)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -679,6 +680,10 @@ Fans and heat aren't a battery risk: the laptop's embedded controller runs the f
 ### Moving Ubuntu to the internal disk later
 
 Once Ubuntu works well from the USB drive, you may want it on the internal SSD next to Windows. That's faster, and there's no drive hanging off the laptop. It also gives up this guide's main safety property, that Windows is physically untouched. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md) is a full plan for that move. It covers Windows 11 Home's Device Encryption, shrinking `C:`, encrypting Ubuntu, and sharing files through Google Drive, including an encrypted Cryptomator vault that also works on Android.
+
+### Google Drive and Proton Drive
+
+Neither Google nor Proton makes a desktop sync app for Linux yet. [CLOUD-STORAGE.md](CLOUD-STORAGE.md) shows how to get your files anyway: browsing Google Drive in the Files app, mounting or syncing it with rclone, and Proton Drive through its web app, Proton's command-line tool or rclone.
 
 ---
 
