@@ -293,6 +293,8 @@ rclone bisync gdrive: ~/GoogleDriveSync \
     --progress
 ```
 
+What you'll see: first rclone lists your whole Drive, which can take several minutes with many files. The folder stays empty and the progress lines only show `Listed` and `Checks` going up. Then files start appearing one by one. Each is written with a `.partial` ending while it downloads, and renamed when it's complete. The `Transferred:` line shows how far along it is.
+
 If it's interrupted, just run the same command again: files already downloaded are skipped.
 
 **4. Later runs** (this is the command the timer below runs):
