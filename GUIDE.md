@@ -444,7 +444,7 @@ The target drive needs exactly **two** partitions:
 | | ① EFI System Partition (ESP) | ② Ubuntu (root, `/`) |
 |---|---|---|
 | **Position on the drive** | First | Second, right after the ESP |
-| **Size** | ~0.5–1 GB | All the remaining space |
+| **Size** | ~1.1 GB (what the installer creates; 512 MB would also be enough) | All the remaining space |
 | **File system** | FAT32 (*VFAT* in the installer) | ext4 |
 | **Mount point** | `/boot/efi` | `/` |
 | **Holds** | Boot loaders (shim, GRUB) | The whole operating system, your apps, your files |
@@ -477,7 +477,7 @@ The target drive needs exactly **two** partitions:
 
    The drop-down lists every drive by name, model and size (e.g. *sdb ORICO (256.06 GB)*). The **installer stick is greyed out**. That's expected: the installer is running from it, so it can't be a target.
 
-   The installer then **adds the EFI System Partition automatically** to that drive. A new small partition (around 0.5–1 GB, shown as FAT32 / VFAT, used for `/boot/efi`) should appear under `sdb`, and the free space shrinks by that amount.
+   The installer then **adds the EFI System Partition automatically** to that drive. A new small partition (about **1.1 GB**, shown as FAT32 / VFAT, used for `/boot/efi`) should appear under `sdb`, and the free space shrinks by that amount. **Keep the size it picks.** The installer also marks this partition as an ESP, and editing it by hand risks losing that mark.
 
    > There's no "EFI System Partition" choice in the *Used as* list (it offers *Ext4, XFS, Btrfs, VFAT, Swap, Leave unformatted*). That's expected in the 24.04 installer: the ESP comes from the boot loader setting, not from the list.
 
