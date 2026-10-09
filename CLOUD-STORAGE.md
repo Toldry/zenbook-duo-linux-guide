@@ -124,9 +124,15 @@ You do this in the Google Cloud Console, Google's site for developers. You don't
 6. **Create the client ID:** **Clients → Create client** (older consoles: **Credentials → Create credentials → OAuth client ID**):
    - **Application type:** **Desktop app**. **Name:** `rclone`.
    - **Create.** A window shows the **Client ID** (ending in `.apps.googleusercontent.com`) and the **Client secret**. Keep it open, or copy both into a text file, for step 2.
-7. **Optional, recommended: publish the app.** While the app is in *Testing*, Google makes your sign-in expire **after 7 days**, and you'd have to run `rclone config reconnect gdrive:` every week. To avoid that: **Audience → Publish app → Confirm**. You do **not** need to submit it for Google's verification; Google just shows a *"Google hasn't verified this app"* warning when you sign in, which is expected for an app only you use.
+7. **Leave the app in *Testing*.** That's the publishing status Google gives it, and it's enough for an app only you use. The catch: in *Testing*, Google makes your sign-in **expire after 7 days**. When that happens, the mount (1.4) and the sync (1.5) stop working until you sign in again with one command (it opens the browser):
 
-   I'm about 75% confident this still works without further checks: some people on the rclone forum report Google asking for a privacy policy and a video instead. If that happens to you, cancel, stay in *Testing*, and reconnect weekly.
+   ```bash
+   rclone config reconnect gdrive:
+   ```
+
+   > **Why not publish the app?** Publishing would stop the weekly expiry, but Google only allows it once the **Branding** page is complete. Besides the name and email, that means an **app home page** and a **privacy policy**, both on a public website, whose domain you then list under **Authorized domains**. If you just click **Publish app**, the Audience page says *"To publish your app, you must complete your configuration on the Branding page"*.
+   >
+   > Some people host those two pages for free on GitHub Pages (a `<your-name>.github.io` site), fill in the Branding page, and then publish. Reportedly, the app then doesn't need to go through Google's verification review. I haven't tested this, and it's a lot of work for a beginner, so this guide sticks with *Testing* and a weekly reconnect. The rclone forum thread on it: https://forum.rclone.org/t/cant-configure-google-drive-client-id/54191
 
 #### Step 2: Create the rclone remote
 
@@ -155,7 +161,7 @@ Answer the questions like this (press **Enter** to accept a default):
 In the browser tab:
 
 1. Pick your Google account.
-2. If you published the app, Google warns *"Google hasn't verified this app"*. It's your own app, so click **Advanced → Go to rclone (unsafe)**.
+2. Google may warn *"Google hasn't verified this app"*. It's your own app, so click **Continue** (or **Advanced → Go to rclone (unsafe)**).
 3. Allow access to your Drive files → **Continue**. The tab says *"Success!"*; close it.
 
 Test it:
@@ -313,6 +319,7 @@ tail -n 20 ~/.cache/rclone-gdrive-bisync.log       # what the last run did
 Rules of thumb:
 
 - 🔁 **Run the sync by hand before you shut down** if you changed something in the last 15 minutes: `systemctl --user start rclone-gdrive-bisync.service`.
+- 🔑 **Reconnect weekly.** While your Google app is in *Testing* (see 1.3), the sync stops with `invalid_grant` in the log after 7 days. Run `rclone config reconnect gdrive:` and it resumes on its next run.
 - 🛑 **Bisync refuses to delete more than half the files in one run.** That's a safety check, not a bug. If you really did delete that much, run it once by hand with `--force`.
 - 🔐 **For sensitive files**, put a [Cryptomator](https://cryptomator.org) vault inside `~/GoogleDriveSync`. Google then only sees encrypted files. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md#key-decisions-and-why) explains this setup, including the Android side.
 
@@ -436,8 +443,9 @@ If Ubuntu runs from the external drive ([GUIDE.md](GUIDE.md)):
 | Bisync stops with *"too many deletes"* | More than half the files would be deleted | Check that it's intended, then run once by hand with `--force` |
 | Files named `….conflict1` appear | The same file changed on two devices between syncs | Compare them, keep the right one, delete the other |
 | Google transfers are slow, or `rateLimitExceeded` / `403` errors | You're over Google's per-user speed limit, or the remote still uses rclone's shared client ID | Normal now and then during big transfers. If `rclone config show gdrive` shows no `client_id`, switch to your own (end of [1.3](#13-connect-rclone-to-google-drive)) |
+| *"To publish your app, you must complete your configuration on the Branding page"* | Publishing needs a home page and privacy policy URL | Not needed: stay in *Testing* ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 7) |
 | *"Access blocked: rclone has not completed the Google verification process"* | Your app is in *Testing* and your address isn't a test user | Add it under **Audience → Test users** ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 5) |
-| `token expired` / `invalid_grant` for Google, about a week after setup | Your app is still in *Testing*, so Google expires sign-ins after 7 days | `rclone config reconnect gdrive:`. To stop it recurring, publish the app ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 7) |
+| `token expired` / `invalid_grant` for Google, about a week after setup | Your app is still in *Testing*, so Google expires sign-ins after 7 days | `rclone config reconnect gdrive:`, then `systemctl --user restart rclone-gdrive.service` if you use the mount. This repeats weekly unless you publish the app ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 7) |
 | Proton login fails with `422` or `401` errors | The beta backend's login problems, often around 2FA | Update rclone, then re-create the remote with a fresh 2FA code. Check the rclone forum for current reports |
 | Google Drive in Files is very slow or shows nothing | Known `gvfs` weakness with big folders | Wait for it to load, or use rclone (1.4) instead |
 | `proton-drive: command not found` | `~/.local/bin` isn't on your command path yet | Log out and back in, or run it as `~/.local/bin/proton-drive` |
