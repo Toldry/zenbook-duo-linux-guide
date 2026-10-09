@@ -105,6 +105,31 @@ To update rclone later, run the `curl … | sudo bash` line again.
 
 ### 1.3 Connect rclone to Google Drive
 
+rclone needs a **client ID**: a key that identifies the program asking Google for access to your Drive. For years rclone offered a shared one, used by everyone who left this field blank. **rclone is retiring it during 2026**, because its traffic is far beyond Google's free quota, and `rclone config` now warns about this. So create your own. It's free, takes about 15 minutes, and only has to be done once.
+
+#### Step 1: Create your own client ID
+
+You do this in the Google Cloud Console, Google's site for developers. You don't need to be one, and it costs nothing: no payment details are needed for this.
+
+> ℹ️ Google rearranges this console often, so the menu names below may differ slightly. rclone's own up-to-date instructions are at https://rclone.org/drive/#making-your-own-client-id.
+
+1. Go to https://console.cloud.google.com and sign in with the Google account whose Drive you want. Accept the terms if asked.
+2. **Create a project:** click the project picker at the top → **New project** → name it e.g. `rclone` → **Create**. Make sure it's selected in the project picker afterwards.
+3. **Turn on the Drive API:** search for **Google Drive API** in the top search bar → open it → **Enable**.
+4. **Set up the consent screen** (the page Google shows when rclone asks for access): **APIs & Services → OAuth consent screen** (newer consoles call it **Google Auth Platform**) → **Get started**:
+   - **App name:** `rclone`. **User support email:** your address.
+   - **Audience:** **External**. (*Internal* only appears for Google Workspace accounts, and only works with Drives in the same organisation.)
+   - **Contact information:** your address. Agree to the policy → **Create**.
+5. **Add yourself as a test user:** **Audience → Test users → Add users** → your Google address → **Save**. Without this, Google answers *"Access blocked"* when you sign in.
+6. **Create the client ID:** **Clients → Create client** (older consoles: **Credentials → Create credentials → OAuth client ID**):
+   - **Application type:** **Desktop app**. **Name:** `rclone`.
+   - **Create.** A window shows the **Client ID** (ending in `.apps.googleusercontent.com`) and the **Client secret**. Keep it open, or copy both into a text file, for step 2.
+7. **Optional, recommended: publish the app.** While the app is in *Testing*, Google makes your sign-in expire **after 7 days**, and you'd have to run `rclone config reconnect gdrive:` every week. To avoid that: **Audience → Publish app → Confirm**. You do **not** need to submit it for Google's verification; Google just shows a *"Google hasn't verified this app"* warning when you sign in, which is expected for an app only you use.
+
+   I'm about 75% confident this still works without further checks: some people on the rclone forum report Google asking for a privacy policy and a video instead. If that happens to you, cancel, stay in *Testing*, and reconnect weekly.
+
+#### Step 2: Create the rclone remote
+
 rclone calls each connected account a **remote**. Create one named `gdrive`:
 
 ```bash
@@ -118,14 +143,20 @@ Answer the questions like this (press **Enter** to accept a default):
 | `n) New remote` … | `n` |
 | `name>` | `gdrive` |
 | `Storage>` | `drive` (Google Drive) |
-| `client_id>` | Enter (blank). See the note below |
-| `client_secret>` | Enter (blank) |
+| `client_id>` | paste your **Client ID** from step 1 |
+| `client_secret>` | paste your **Client secret** |
 | `scope>` | `1` (full access to all files) |
 | `service_account_file>` | Enter (blank) |
 | `Edit advanced config?` | `n` |
-| `Use web browser to automatically authenticate…?` | `y`. A browser tab opens: sign in and click **Allow** |
+| `Use web browser to automatically authenticate…?` | `y`. A browser tab opens; see below |
 | `Configure this as a Shared Drive (Team Drive)?` | `n` (unless you use a work Shared Drive) |
 | `Keep this "gdrive" remote?` | `y`, then `q` to quit |
+
+In the browser tab:
+
+1. Pick your Google account.
+2. If you published the app, Google warns *"Google hasn't verified this app"*. It's your own app, so click **Advanced → Go to rclone (unsafe)**.
+3. Allow access to your Drive files → **Continue**. The tab says *"Success!"*; close it.
 
 Test it:
 
@@ -133,7 +164,12 @@ Test it:
 rclone lsd gdrive:          # lists the folders at the top of your Drive
 ```
 
-> **About the blank `client_id`:** rclone then uses its own shared Google access key, which thousands of people share. Google limits how fast it can be used, so big transfers can be slow. If that bothers you, rclone's documentation explains how to create your own free key in the Google Cloud Console (*"Making your own client_id"*: https://rclone.org/drive/#making-your-own-client-id). It takes about 15 minutes. For normal use, the shared one is fine.
+> **Already made a `gdrive` remote with the blank (shared) client ID?** Switch it to your own without starting over:
+>
+> ```bash
+> rclone config update gdrive client_id=YOUR_CLIENT_ID client_secret=YOUR_CLIENT_SECRET
+> rclone config reconnect gdrive:
+> ```
 
 ### 1.4 Option A: mount Google Drive as a folder
 
@@ -399,8 +435,9 @@ If Ubuntu runs from the external drive ([GUIDE.md](GUIDE.md)):
 | Bisync stops with *"cannot find prior listings"* or *"must run --resync"* | First run, or the state files were lost | Run the first-run command from 1.5 step 2 again (with `--resync`) |
 | Bisync stops with *"too many deletes"* | More than half the files would be deleted | Check that it's intended, then run once by hand with `--force` |
 | Files named `….conflict1` appear | The same file changed on two devices between syncs | Compare them, keep the right one, delete the other |
-| Google transfers are slow, or `rateLimitExceeded` / `403` errors | rclone's shared Google key is busy | Normal now and then. For heavy use, make your own `client_id` (see the note in 1.3) |
-| `token expired` / `invalid_grant` for Google | Your Google sign-in was revoked or expired | `rclone config reconnect gdrive:` |
+| Google transfers are slow, or `rateLimitExceeded` / `403` errors | You're over Google's per-user speed limit, or the remote still uses rclone's shared client ID | Normal now and then during big transfers. If `rclone config show gdrive` shows no `client_id`, switch to your own (end of [1.3](#13-connect-rclone-to-google-drive)) |
+| *"Access blocked: rclone has not completed the Google verification process"* | Your app is in *Testing* and your address isn't a test user | Add it under **Audience → Test users** ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 5) |
+| `token expired` / `invalid_grant` for Google, about a week after setup | Your app is still in *Testing*, so Google expires sign-ins after 7 days | `rclone config reconnect gdrive:`. To stop it recurring, publish the app ([1.3](#13-connect-rclone-to-google-drive), Step 1, item 7) |
 | Proton login fails with `422` or `401` errors | The beta backend's login problems, often around 2FA | Update rclone, then re-create the remote with a fresh 2FA code. Check the rclone forum for current reports |
 | Google Drive in Files is very slow or shows nothing | Known `gvfs` weakness with big folders | Wait for it to load, or use rclone (1.4) instead |
 | `proton-drive: command not found` | `~/.local/bin` isn't on your command path yet | Log out and back in, or run it as `~/.local/bin/proton-drive` |
@@ -418,7 +455,7 @@ Nothing here touches your cloud files unless you delete them yourself.
    systemctl --user daemon-reload
    ```
    (Same for `rclone-proton.service` if you created it.)
-2. **Remove the rclone accounts:** `rclone config delete gdrive` and `rclone config delete proton`. Then revoke rclone's access at https://myaccount.google.com/permissions.
+2. **Remove the rclone accounts:** `rclone config delete gdrive` and `rclone config delete proton`. Then revoke rclone's access at https://myaccount.google.com/permissions, and delete the `rclone` project at https://console.cloud.google.com (**IAM & Admin → Settings → Shut down**).
 3. **Remove rclone itself:** `sudo rm /usr/bin/rclone /usr/local/share/man/man1/rclone.1`.
 4. **Remove local copies** you no longer need, after checking they're also in the cloud: `~/GoogleDriveSync`, `~/.cache/rclone`.
 5. **Built-in Google Drive:** **Settings → Online Accounts → Google → Remove**.
@@ -428,7 +465,8 @@ Nothing here touches your cloud files unless you delete them yourself.
 
 ## Sources
 
-- rclone documentation: Google Drive (https://rclone.org/drive/), Proton Drive (https://rclone.org/protondrive/, *"added in v1.64.0"*, beta), bisync (https://rclone.org/bisync/), mount (https://rclone.org/commands/rclone_mount/), install (https://rclone.org/install/)
+- rclone documentation: Google Drive (https://rclone.org/drive/, including *"Making your own client_id"*), Proton Drive (https://rclone.org/protondrive/, *"added in v1.64.0"*, beta), bisync (https://rclone.org/bisync/), mount (https://rclone.org/commands/rclone_mount/), install (https://rclone.org/install/)
+- Retirement of rclone's shared Google client ID: https://forum.rclone.org/t/google-drive-and-google-photos-users-action-required/54005 and https://github.com/rclone/rclone/issues/9580
 - rclone forum reports from 2025–2026 on Proton Drive: login errors (https://forum.rclone.org/t/cannot-use-the-proton-drive-remote/53944), mount problems on Ubuntu 24.04 (https://forum.rclone.org/t/mount-protondrive-on-linux-fails/53717), *"didn't find backend called protondrive"* on an older rclone (https://forum.rclone.org/t/proton-drive-gopenpgp-error-in-reading-key-ring-openpgp/49179)
 - Proton Drive roadmap: https://proton.me/drive/roadmap
 - OMG! Ubuntu, June 2026, on Proton's Linux client plans: https://www.omgubuntu.co.uk/2026/06/proton-drive-linux-client
