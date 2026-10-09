@@ -434,22 +434,68 @@ Double-click **Install Ubuntu 24.04** on the desktop, then:
 
 ### 6.4 Partition the target drive manually (the important part)
 
+#### What you're about to create, and why
+
+A **partition** is a section of a drive that the operating system treats as a separate area with its own file system (its own way of organising files). Every drive starts with a **partition table**, a small index at the very start that lists where each partition begins and ends. Modern PCs use the **GPT** type of table.
+
+The target drive needs exactly **two** partitions:
+
+```
+USB drive #2 (e.g. sdb, 256 GB)
+┌───────────────┬──────────────────────────────────────────────────────┐
+│ ① EFI System  │ ② Ubuntu (ext4, mounted at /)                         │
+│   Partition   │   the whole operating system, your apps, your files   │
+│   ~0.5–1 GB   │   all the remaining space                             │
+│   FAT32       │                                                       │
+└───────────────┴──────────────────────────────────────────────────────┘
+   ▲ the laptop's firmware reads this at power-on
+```
+
+**① EFI System Partition (ESP)**
+- **What it is:** a small partition, formatted **FAT32**, that holds boot loaders: the first programs started at power-on. For Ubuntu that's *shim* and *GRUB*, which then start Linux.
+- **Why it's needed:** the laptop's firmware (UEFI) doesn't understand Linux file systems. It can only read FAT32, and it only looks for boot loaders in partitions marked as an ESP. Without one, the drive can't boot.
+- **Why on the USB drive itself:** the internal disk has its own ESP, which Windows uses. Giving the USB drive its **own** ESP means Ubuntu's boot files never touch the internal disk, and the USB drive boots on its own, even on another PC.
+- **Size:** 512 MB–1 GB is plenty. It only holds a few small files.
+
+**② Root partition (`/`), ext4**
+- **What it is:** where Ubuntu itself lives: the system, installed apps, settings, and your home folder (`/home/<you>`) with your files. `/` ("root") is the top of Linux's single folder tree, so "mounted at `/`" means "this partition *is* the main drive".
+- **Why ext4:** it's Ubuntu's default file system, the most widely used and tested on Linux, and robust after unexpected power loss. The installer also offers *XFS* and *Btrfs*. Btrfs adds features such as snapshots, but it's more complex. For a first install, ext4 is the safe choice.
+- **Size:** everything that's left.
+
+**What you don't need:**
+- **A swap partition.** Swap is disk space used as overflow when RAM is full. Ubuntu creates a swap *file* inside `/` automatically, so a separate partition (the *Swap* option) isn't necessary.
+- **A separate `/home` partition.** It's useful for some advanced setups, but it only adds complexity here.
+
+#### Steps
+
 1. On **"How do you want to install Ubuntu?"**, choose **Manual installation**. *Do **not** choose "Install alongside Windows" or "Erase disk"; those can work on the internal disk.*
-2. In the partition editor, select your **target drive** (`sdb` in the example; check the size).
-3. If it already has partitions, delete them all (select each one → **−**). **Only on the target drive!**
-4. Create these partitions in the free space on the target drive (select free space → **+**):
+2. Find your **target drive** in the list (`sdb` in the example from 6.2; **check the size**). The internal disk is the one named `nvme0n1`. Its Windows partition (`nvme0n1p3`) shows a 🔒 padlock if it's encrypted. **Don't select anything under `nvme0n1`.**
+3. **Make the target drive empty:**
+   - If it shows only **Free space** under it, it's already empty. Go to step 4.
+   - If it shows partitions (`sdb1`, `sdb2`, …), select each one → **−** to delete it. **Only under the target drive!**
+   - Alternatively, select the drive itself (the `sdb` line) → **New partition table**. This erases the whole drive in one go. Check twice that the `sdb` line is selected, not `nvme0n1`.
+4. **Create the EFI System Partition by choosing the boot loader device.** Open the **Device for boot loader installation** drop-down at the bottom and choose **the target drive itself** (e.g. `sdb`; **never** `nvme0n1`).
 
-   | # | Size | Used as / Type | Mount point | Why |
-   |---|---|---|---|---|
-   | 1 | **512 MB** | **EFI System Partition** (FAT32) | `/boot/efi` (set automatically) | The USB drive's own boot partition, so it never needs the internal one |
-   | 2 | **all remaining space** | **ext4** | `/` | Ubuntu and your files |
+   The installer then **adds the EFI System Partition automatically** to that drive. A new small partition (around 0.5–1 GB, shown as FAT32 / VFAT, used for `/boot/efi`) should appear under `sdb`, and the free space shrinks by that amount.
 
-   (You don't need a swap partition. Ubuntu creates a swap *file* automatically.)
+   > There's no "EFI System Partition" choice in the *Used as* list (it offers *Ext4, XFS, Btrfs, VFAT, Swap, Leave unformatted*). That's expected in the 24.04 installer: the ESP comes from the boot loader setting, not from the list.
 
-5. At the bottom of the screen, find **"Device for boot loader installation"** and choose **the target drive itself** (e.g. `/dev/sdb`, **not** `sdb1` and **never** `nvme0n1`).
-6. **Check the summary screen carefully before you click Install.** Every line that says *formatted* or *created* must mention your target (e.g. `sdb`). If you see `nvme0n1` anywhere, go **Back** and fix it.
+5. **Create the Ubuntu partition.** Select the remaining **Free space** under `sdb` → **+**, and set:
 
-> 💡 **Should I encrypt the USB drive?** A USB drive is easy to lose. If you'll carry personal data on it, look for **Advanced features → Use LVM and encryption** on the guided path. It's more complex with manual partitioning on 24.04, so if this is your first time, install without encryption first and learn the basics.
+   | Field | Value |
+   |---|---|
+   | **Size** | all of it (leave the maximum it suggests) |
+   | **Used as** | **Ext4** |
+   | **Mount point** | **`/`** |
+
+   Click **OK**.
+
+6. **Check the table.** Under `sdb` there should now be exactly two partitions: the small FAT32 one for `/boot/efi`, and the large Ext4 one for `/`. Nothing under `nvme0n1` should have its **Format** box ticked or show a new mount point.
+7. Click **Next**, and **check the summary screen carefully before you click Install.** Every line that says *formatted* or *created* must mention your target (e.g. `sdb`). If you see `nvme0n1` anywhere, go **Back** and fix it.
+
+> **If no small partition appears in step 4:** create it yourself. Select the free space → **+** → **Size** `512` MB, **Used as** **VFAT**, **Mount point** `/boot/efi` → **OK**. Then do step 5 with the rest. After installing, do [7.3](#73-make-the-usb-drive-boot-on-its-own-recommended), which copies the boot files to the location every firmware checks. If the drive then doesn't appear in the `Esc` boot menu, the partition may not have been marked as an ESP. Stop and ask for help in the places listed in [Troubleshooting](#10-troubleshooting) rather than experimenting.
+
+> 💡 **Should I encrypt the USB drive?** A USB drive is easy to lose. If you'll carry personal data on it, look for **Advanced features → Use LVM and encryption** on the guided path. Manual partitioning on 24.04 may not offer encryption (the *Used as* list above has no encrypted option), so if this is your first time, install without encryption first and learn the basics.
 
 ### 6.5 Finish the install
 
