@@ -476,6 +476,8 @@ USB drive #2 (e.g. sdb, 256 GB)
    - Alternatively, select the drive itself (the `sdb` line) → **New partition table**. This erases the whole drive in one go. Check twice that the `sdb` line is selected, not `nvme0n1`.
 4. **Create the EFI System Partition by choosing the boot loader device.** Open the **Device for boot loader installation** drop-down at the bottom and choose **the target drive itself** (e.g. `sdb`; **never** `nvme0n1`).
 
+   The drop-down lists every drive by name, model and size (e.g. *sdb ORICO (256.06 GB)*). The **installer stick is greyed out**. That's expected: the installer is running from it, so it can't be a target.
+
    The installer then **adds the EFI System Partition automatically** to that drive. A new small partition (around 0.5–1 GB, shown as FAT32 / VFAT, used for `/boot/efi`) should appear under `sdb`, and the free space shrinks by that amount.
 
    > There's no "EFI System Partition" choice in the *Used as* list (it offers *Ext4, XFS, Btrfs, VFAT, Swap, Leave unformatted*). That's expected in the 24.04 installer: the ESP comes from the boot loader setting, not from the list.
