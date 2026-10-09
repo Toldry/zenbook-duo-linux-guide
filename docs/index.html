@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rclone for personal Google Drive</title>
+  <meta name="description"
+        content="Home page of a personal rclone setup that gives one person's
+                 Ubuntu computer access to their own Google Drive.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>rclone for personal Google Drive</h1>
+
+  <p>
+    This page is the home page of a <strong>personal</strong> Google OAuth
+    app named <em>rclone</em>. It isn't a product or a service: it's a
+    Google Cloud client ID that one person created for their own use, so
+    that the open-source program
+    <a href="https://rclone.org">rclone</a>, running on their own Ubuntu
+    computer, can read and write files in their own Google Drive.
+  </p>
+
+  <h2>What the app does</h2>
+  <ul>
+    <li>Shows the owner's Google Drive as a folder on their computer
+        (<code>rclone mount</code>).</li>
+    <li>Keeps a local folder and a Google Drive folder in sync
+        (<code>rclone bisync</code>).</li>
+  </ul>
+  <p>
+    It runs only on the owner's computer, and it's used only with the
+    owner's own Google account. There is no website, server or database
+    behind it, and nobody else is meant to sign in to it.
+  </p>
+
+  <h2>How it's set up</h2>
+  <p>
+    The setup is described step by step in
+    <a href="https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/CLOUD-STORAGE.md">Google
+    Drive and Proton Drive on Ubuntu</a>, part of the
+    <a href="https://github.com/Toldry/zenbook-duo-linux-guide">Zenbook Duo
+    Linux guide</a>. Everyone who follows that guide creates their own
+    client ID in their own Google Cloud project; these pages describe each
+    of those personal apps.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    The app collects nothing and sends your data nowhere except between
+    Google and your own computer. Details:
+    <a href="privacy.html">Privacy policy</a>.
+  </p>
+
+  <footer>
+    Questions:
+    <a href="https://github.com/Toldry/zenbook-duo-linux-guide/issues">open
+    an issue on GitHub</a>.
+    · <a href="privacy.html">Privacy policy</a>
+  </footer>
+</main>
+</body>
+</html>

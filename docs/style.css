@@ -1,0 +1,56 @@
+:root {
+  --text: #1d1d1f;
+  --muted: #5a5a60;
+  --background: #ffffff;
+  --accent: #0b5cad;
+  --border: #d9d9de;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #ececf1;
+    --muted: #a8a8b3;
+    --background: #16161a;
+    --accent: #7ab4f5;
+    --border: #3a3a42;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0 16px;
+  background: var(--background);
+  color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Ubuntu, sans-serif;
+}
+
+main {
+  max-width: 44rem;
+  margin: 3rem auto;
+}
+
+h1 {
+  font-size: 1.8rem;
+  line-height: 1.25;
+}
+
+h2 {
+  margin-top: 2rem;
+  font-size: 1.2rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-size: 0.92em;
+}
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}

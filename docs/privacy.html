@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rclone privacy policy</title>
+  <meta name="description"
+        content="Privacy policy of a personal rclone setup for Google Drive.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Privacy policy</h1>
+  <p>
+    For the personal Google OAuth app <em>rclone</em> described on the
+    <a href="index.html">home page</a>. Last updated: 9 October 2026.
+  </p>
+
+  <h2>Who runs the app</h2>
+  <p>
+    The app is a Google Cloud client ID created by one person (“the
+    owner”) for use with their own Google account, on their own computer,
+    with the open-source program <a href="https://rclone.org">rclone</a>.
+    It isn't offered to anyone else.
+  </p>
+
+  <h2>What data the app accesses</h2>
+  <p>
+    With the owner's permission, given on Google's sign-in screen, the app
+    accesses the files and folders in the owner's Google Drive, and their
+    names and other metadata, through the Google Drive API. It uses this
+    access only to show, copy and sync those files between Google Drive
+    and the owner's computer, as the owner instructs rclone to.
+  </p>
+
+  <h2>Where the data goes</h2>
+  <ul>
+    <li>Data moves <strong>only between Google's servers and the owner's
+        own computer</strong>.</li>
+    <li>The sign-in token is stored only on the owner's computer, in
+        rclone's configuration file.</li>
+    <li>Copies of files are stored only on the owner's computer, where the
+        owner decides to keep them.</li>
+    <li>The app has no server, database, analytics or advertising. No
+        data is collected, sold, shared with or transferred to anyone
+        else, and none is used to train AI or machine-learning
+        models.</li>
+  </ul>
+
+  <h2>Google API Services User Data Policy</h2>
+  <p>
+    The app's use and transfer of information received from Google APIs
+    adheres to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+    API Services User Data Policy</a>, including the Limited Use
+    requirements.
+  </p>
+
+  <h2>How to remove access and data</h2>
+  <ul>
+    <li>Remove the app's access to your Google account at any time at
+        <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+    <li>Delete the local sign-in token with
+        <code>rclone config delete gdrive</code>, and delete local copies
+        of files like any other files on your computer.</li>
+  </ul>
+
+  <h2>Changes</h2>
+  <p>
+    If this policy changes, the new version is published on this page
+    with a new date. Earlier versions are in the
+    <a href="https://github.com/Toldry/zenbook-duo-linux-guide/commits/main/docs/privacy.html">history
+    of this file</a>.
+  </p>
+
+  <footer>
+    Questions:
+    <a href="https://github.com/Toldry/zenbook-duo-linux-guide/issues">open
+    an issue on GitHub</a>.
+    · <a href="index.html">Home page</a>
+  </footer>
+</main>
+</body>
+</html>
