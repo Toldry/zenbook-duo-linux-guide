@@ -738,6 +738,7 @@ flowchart TD
     A[Power on] --> B{Ubuntu drive<br/>plugged in?}
     B -- yes --> C["1st entry: ubuntu<br/>(GRUB on the USB drive)"] --> D[Ubuntu]
     B -- no --> E["1st entry skipped<br/>2nd entry: Windows Boot Manager"] --> F[Windows]
+    E -. "ASUS firmware also moves<br/>the ubuntu entry down" .-> G["Windows startup task<br/>moves it back up (step 5)"]
 ```
 
 This changes a setting in the laptop's firmware, not anything on the internal disk, and it's undone with one command. Do it from the installed Ubuntu, after [Step 7.3](#73-make-the-usb-drive-boot-on-its-own-recommended).
@@ -765,23 +766,48 @@ This changes a setting in the laptop's firmware, not anything on the internal di
    ```bash
    sudo efibootmgr -o 0003,0000,0001
    ```
-4. **Test all three cases**, each time starting from **off**:
+4. **Test it:** shut down, unplug the drive, power on. Windows starts. Shut down, plug the drive in, power on. On a UX8406MA, **Windows starts again**, and back in Ubuntu `sudo efibootmgr` shows `BootOrder` with Windows first. The firmware moves an entry down whenever its drive is missing at power-on. (Booting Windows with the drive plugged in, via `Esc`, leaves the order alone, so it's the firmware, not Windows.) Step 5 fixes this.
+5. **Have Windows put Ubuntu back on top at every start.** Windows always runs after a power-on without the drive, so a small startup task can undo the firmware's change. In Windows, open **Terminal (Admin)** and paste this whole block:
+   ```powershell
+   $folder = "$env:ProgramFiles\UbuntuFirst"
+   New-Item -ItemType Directory -Force $folder | Out-Null
+   Set-Content -Path "$folder\ubuntu-first.ps1" -Value @'
+   # Put the external SSD's Ubuntu entry first in the UEFI boot order.
+   # The firmware moves it down whenever the SSD is missing at power-on.
+   $firmwareEntries = ((bcdedit /enum firmware) -join "`n") -split "`n\s*`n"
+   $ubuntuEntry = $firmwareEntries |
+       Where-Object { $_ -match '(?m)^path\s+\\EFI\\ubuntu\\shimx64\.efi' } |
+       Select-Object -First 1
+   if ($ubuntuEntry -match '(?m)^identifier\s+(\{[0-9a-fA-F-]+\})') {
+       bcdedit /set '{fwbootmgr}' displayorder $Matches[1] /addfirst | Out-Null
+   }
+   '@
+   $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+       -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$folder\ubuntu-first.ps1`""
+   $trigger = New-ScheduledTaskTrigger -AtStartup
+   $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
+   Register-ScheduledTask -TaskName 'Ubuntu first in boot order' `
+       -Action $action -Trigger $trigger -Principal $principal | Out-Null
+   & "$folder\ubuntu-first.ps1"
+   bcdedit /enum '{fwbootmgr}'
+   ```
+   It saves a small script where only admins can change it (`C:\Program Files\UbuntuFirst`), runs it at every Windows start as a scheduled task, and runs it once now. The script finds the firmware entry whose path is `\EFI\ubuntu\shimx64.efi` and moves it to the front with `bcdedit`, Windows' counterpart of `efibootmgr`. In the last output, the first line under `displayorder` should be that entry, not `{bootmgr}`. The script reads `bcdedit`'s English labels (`path`, `identifier`), so on a Windows in another display language, those two words in it need translating.
+6. **Repeat the test from step 4.** Now the drive decides: plugged in → Ubuntu, unplugged → Windows.
 
-   | Test | Expected |
-   |---|---|
-   | Drive plugged in → power on | Ubuntu starts |
-   | Shut down, unplug → power on | Windows starts |
-   | Shut down Windows, plug in → power on | Ubuntu starts again |
-
-   Then run `sudo efibootmgr` once more: `BootOrder` should still start with the `ubuntu` entry. The third test matters: some ASUS firmware drops or reorders entries for drives that were missing at boot. If it did, set the order in the firmware instead: `F2` at power-on → `F7` (Advanced Mode) → **Boot** → **Boot Option #1** = the USB drive, with the drive plugged in → **Save & Exit**. If the drive is ignored at boot even then, try turning off **Fast Boot** on the same tab.
+If you'd rather not run a task in Windows, the firmware's own setting may hold better: `F2` at power-on → `F7` (Advanced Mode) → **Boot** → **Boot Option #1** = the USB drive, with the drive plugged in → **Save & Exit**. This is untested on the Duo.
 
 **Living with it:**
 
 - **To start Windows with the drive plugged in:** tap `Esc` at power-on and pick *Windows Boot Manager*.
 - **Restart in Windows now lands in Ubuntu** if the drive is plugged in. That's a warm start, so the speakers may not work; switching from Windows still means **Shut Down**.
 - **Unplug the drive while Windows installs updates.** Windows Update restarts several times, and each restart would otherwise go to Ubuntu. The update just waits for the next Windows start, but it's annoying.
-- **A Windows update may put Windows Boot Manager back on top.** Then the drive needs `Esc` again; repeat step 3.
-- **To undo:** `sudo efibootmgr -o` with *Windows Boot Manager* first (e.g. `0000,0003,0001`), or `F2` → **Boot** → move *Windows Boot Manager* to the top.
+- **A black Ubuntu menu with a countdown** ("Ubuntu", "Advanced options for Ubuntu", …) sometimes appears. Ubuntu normally hides it, and shows it when the previous Ubuntu session didn't end cleanly (e.g. a forced power-off). Wait, and it starts Ubuntu on its own. Leave this safety menu on: it's how you reach an older kernel if an update breaks something.
+- **To undo:** in an admin terminal in Windows, remove the task:
+  ```powershell
+  Unregister-ScheduledTask -TaskName 'Ubuntu first in boot order' -Confirm:$false
+  Remove-Item -Recurse "$env:ProgramFiles\UbuntuFirst"
+  ```
+  Then, in Ubuntu, `sudo efibootmgr -o` with *Windows Boot Manager* first (e.g. `0000,0003,0001`), or `F2` → **Boot** → move *Windows Boot Manager* to the top.
 
 ### Battery care if Ubuntu becomes your main OS
 
@@ -836,6 +862,7 @@ Once Ubuntu works well from the USB drive, you may want it on the internal SSD n
 | Sound problems even though you **did** Shut Down, and the log has no `PUP_DONE` line | Not the amplifier start-up problem | Thin or quiet: see the next row. Crackling or silent, even with EasyEffects bypassed: ask in the add-on's issues with your `duo doctor` output |
 | Speakers sound thin or quiet compared with Windows | Ubuntu doesn't have the Dolby tuning that Windows applies | Rebuild it from the Windows driver: [8.6](#86-make-the-speakers-sound-like-windows-optional). For loudness alone: **Settings → Sound → Over-Amplification** (can distort near the top) |
 | `duo layout login` says `monitors.xml has an unknown element <layoutmode> — refusing` | GNOME 50 (Ubuntu 26.04) writes a newer display-settings file than add-on 0.9.0's helper accepts. It refuses on purpose, because it runs as root | Harmless: only the login screen's screen layout is affected, and the dock policy takes over once you log in. Ignore it until the add-on is updated |
+| Ubuntu drive plugged in, but Windows starts (automatic boot set up) | The firmware moved the Ubuntu entry down after a boot without the drive, and the Windows startup task isn't installed or didn't run | Install or check the task: [section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional), step 5. Meanwhile, tap `Esc` and pick the drive |
 | Laptop starts Ubuntu when you wanted Windows | You set up the automatic boot ([section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional)), and the drive is plugged in | Tap `Esc` at power-on → *Windows Boot Manager*, or unplug the drive |
 | Live session stuck at *"Please remove the installation medium, then press ENTER"*; no keyboard responds | Ubuntu has already shut down, and the keyboard drivers are gone | **Hold the power button for about 10 seconds.** Safe at this point |
 | **Bottom screen not detected in Windows** (Device Manager → View → Show hidden devices → Monitors shows a greyed-out *MyASUS_Splendid*). Restarts and `Win + Ctrl + Shift + B` don't help | The laptop's embedded controller (the always-on chip that manages power) kept the bottom panel switched off, typically after a forced power-off | **Embedded-controller reset:** shut down, **unplug the charger**, **detach the keyboard** (not resting on the screen), **hold the power button for 40 seconds** (keep holding even if it turns on), release, plug the charger back in, power on |
@@ -852,13 +879,14 @@ Once Ubuntu works well from the USB drive, you may want it on the internal SSD n
 
 ## 11. How to undo everything
 
-Because nothing was installed on the internal disk, undoing is simple:
+Because nothing was installed on the internal disk, undoing is simple (the optional automatic boot adds one small Windows task, step 3):
 
 1. **Unplug the USB drive.** Windows boots exactly as before.
 2. **Reuse the USB drive:** in Windows, open **Disk Management** (right-click Start), right-click each partition **on the USB drive** → **Delete Volume**, then right-click the empty space → **New Simple Volume** → NTFS or exFAT. *(Double-check the disk number and size so you're working on the USB drive, not Disk 0.)*
-3. **If Windows Boot Manager isn't first in the boot order:** press `F2` at power-on → **Boot** → move it to the top → **Save & Exit**.
-4. **If there's an `ubuntu` folder on the internal EFI partition** (Step 7.2) and you want it gone: in an admin terminal, run `bcdedit /enum firmware` to see whether an "ubuntu" entry exists. It's harmless to leave it. If you want it removed, ask for help instead of deleting EFI files by hand.
-5. **Optional:** turn Fast Startup back on (see the commands at the end of Step 2.2).
+3. **If you set up the automatic boot** ([section 9](#boot-ubuntu-automatically-when-the-drive-is-plugged-in-optional)), remove its Windows task with the two commands at the end of that section.
+4. **If Windows Boot Manager isn't first in the boot order:** press `F2` at power-on → **Boot** → move it to the top → **Save & Exit**.
+5. **If there's an `ubuntu` folder on the internal EFI partition** (Step 7.2) and you want it gone: in an admin terminal, run `bcdedit /enum firmware` to see whether an "ubuntu" entry exists. It's harmless to leave it. If you want it removed, ask for help instead of deleting EFI files by hand.
+6. **Optional:** turn Fast Startup back on (see the commands at the end of Step 2.2).
 
 ---
 
@@ -866,7 +894,7 @@ Because nothing was installed on the internal disk, undoing is simple:
 
 - [JowiAoun/linux-on-zenbook-duo](https://github.com/JowiAoun/linux-on-zenbook-duo): install commands, `duo-cli doctor`, kernel ≥ 6.11 and Fast Startup warnings, tested on Ubuntu 24.04.4. Its [`system/46-speaker-amp.sh`](https://github.com/JowiAoun/linux-on-zenbook-duo/blob/main/system/46-speaker-amp.sh) documents the CS35L41 speaker-amp failure and why a cold power-off is the fix
 - Hands-on test on a UX8406MA with an Ubuntu 24.04.5 live session (kernel 7.0), October 2026: the boot-method speaker problem, the live image's Wayland setting, the live-session add-on test, and the embedded-controller reset
-- Hands-on install of Ubuntu 26.04.1 (kernel 7.0, GNOME 50) on an external SSD, on a UX8406MA with add-on 0.9.0, October 2026: the `duo doctor` results before and after the install, the `duo layout login` failure, and the Dolby tuning match (Realtek ALC294, `DEV_0294_SUBSYS_10431C43`)
+- Hands-on install of Ubuntu 26.04.1 (kernel 7.0, GNOME 50) on an external SSD, on a UX8406MA with add-on 0.9.0, October 2026: the `duo doctor` results before and after the install, the `duo layout login` failure, and the Dolby tuning match (Realtek ALC294, `DEV_0294_SUBSYS_10431C43`), and the firmware moving the Ubuntu boot entry down after a boot without the drive (fixed with the Windows startup task in section 9)
 - [antoinecellerier/speaker-tuning-to-easyeffects](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects): rebuilds the Windows Dolby speaker tuning as EasyEffects presets; [`docs/getting-the-xml.md`](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects/blob/master/docs/getting-the-xml.md) covers where the XML lives
 - [Ubuntu Server docs: phased updates](https://ubuntu.com/server/docs/about-apt-upgrade-and-phased-updates): why `apt` holds some updates back
 - [`efibootmgr` manual](https://manpages.ubuntu.com/manpages/noble/man8/efibootmgr.8.html): listing boot entries and setting the boot order
