@@ -404,18 +404,19 @@ Open **Terminal** and run:
 lsblk -o NAME,SIZE,TRAN,MODEL
 ```
 
-You'll see something like:
+The output has the columns `NAME`, `SIZE`, `TRAN` (how the drive is connected) and `MODEL`. With the example drives from this guide, it looks like this (the last column is added here for explanation):
 
-```
-NAME          SIZE  TRAN   MODEL
-sda            7.5G usb    SanDisk Ultra        ← installer stick (#1)
-sdb          232.9G usb    Samsung PSSD T7      ← TARGET (#2)  ✅ install here
-nvme0n1      953.9G nvme   Micron/SK hynix ...  ← INTERNAL WINDOWS DISK ⛔ never touch
-├─nvme0n1p1    260M                              (Windows EFI partition)
-├─nvme0n1p2     16M
-├─nvme0n1p3  952.0G                              (C:)
-└─nvme0n1p4      1G                              (Recovery)
-```
+| NAME | SIZE | TRAN | MODEL | What it is |
+|---|---|---|---|---|
+| `sda` | 14.9G | usb | PHILIPS | Installer stick (#1) |
+| `sdb` | 238.5G | usb | ORICO | **Target (#2): ✅ install here** |
+| `nvme0n1` | 953.9G | nvme | *(internal SSD)* | **Internal Windows disk: ⛔ never touch** |
+| `├─nvme0n1p1` | 260M | | | Windows EFI partition |
+| `├─nvme0n1p2` | 16M | | | Windows reserved partition (MSR) |
+| `├─nvme0n1p3` | 952.0G | | | `C:` |
+| `└─nvme0n1p4` | 1G | | | Recovery (not on every laptop) |
+
+Sizes here are in GiB (binary units), so they look smaller than the GB on the box: a "256 GB" drive shows as about 238G. The installer shows the box's numbers (e.g. *ORICO (256.06 GB)*).
 
 **Write down your target's name (e.g. `sdb`) and size.** In this example, **`TRAN = usb`** + matching size + matching model = the right drive. Anything starting with `nvme` is the internal disk.
 
@@ -440,16 +441,14 @@ A **partition** is a section of a drive that the operating system treats as a se
 
 The target drive needs exactly **two** partitions:
 
-```
-USB drive #2 (e.g. sdb, 256 GB)
-┌───────────────┬──────────────────────────────────────────────────────┐
-│ ① EFI System  │ ② Ubuntu (ext4, mounted at /)                         │
-│   Partition   │   the whole operating system, your apps, your files   │
-│   ~0.5–1 GB   │   all the remaining space                             │
-│   FAT32       │                                                       │
-└───────────────┴──────────────────────────────────────────────────────┘
-   ▲ the laptop's firmware reads this at power-on
-```
+| | ① EFI System Partition (ESP) | ② Ubuntu (root, `/`) |
+|---|---|---|
+| **Position on the drive** | First | Second, right after the ESP |
+| **Size** | ~0.5–1 GB | All the remaining space |
+| **File system** | FAT32 (*VFAT* in the installer) | ext4 |
+| **Mount point** | `/boot/efi` | `/` |
+| **Holds** | Boot loaders (shim, GRUB) | The whole operating system, your apps, your files |
+| **Read by** | The laptop's firmware, at power-on | Linux, once it's running |
 
 **① EFI System Partition (ESP)**
 - **What it is:** a small partition, formatted **FAT32**, that holds boot loaders: the first programs started at power-on. For Ubuntu that's *shim* and *GRUB*, which then start Linux.
