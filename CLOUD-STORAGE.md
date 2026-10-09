@@ -257,51 +257,66 @@ What to expect: still **no offline access**. If the network drops, the folder ha
 
 ### 1.5 Option B: keep a synced offline copy
 
-`rclone bisync` ("bidirectional sync") keeps a local folder and a cloud folder the same: changes on either side are copied to the other. It's the closest thing to the Windows Drive app.
+`rclone bisync` ("bidirectional sync") keeps a local folder and Google Drive the same: changes on either side are copied to the other. It's the closest thing to the Windows Drive app. This section syncs **your whole Drive** (*My Drive*) with `~/GoogleDriveSync`.
 
-> **Sync one folder, not the whole Drive.** The commands below sync a **new, empty** Drive folder called `Laptop`: at first it holds nothing, and only what you put in it (on either side) gets synced. To sync files you already have, either move them into `Laptop` (in the Drive web app, or by copying them into `~/GoogleDriveSync`), or replace `gdrive:Laptop` everywhere below with an existing folder, e.g. `gdrive:Documents`.
->
-> You can also sync the whole Drive with `gdrive:` (no folder name), but first check that it fits: `rclone size gdrive: --drive-skip-gdocs` prints its total size. A whole Drive can be bigger than the USB drive, and a smaller sync is quicker and safer.
->
-> To change the folder later, use a new, empty local folder and repeat steps 1 and 2 (including `--resync`) with the new names, and update the service file in step 4.
+**What's not included:**
 
-**1. Create the folders, put a file in, and do a dry run** (shows what would happen, changes nothing):
+- **Google Docs, Sheets and Slides** (`--drive-skip-gdocs`). They aren't real files, and syncing them as exported `.docx`/`.xlsx` copies leads to confusing duplicates. Keep using them in the browser.
+- **Shortcuts** (`--drive-skip-shortcuts`). Otherwise rclone would download the file a shortcut points to as an extra copy, and deleting it locally could delete the original.
+- **Shared with me** and **Computers** (backups made by the Windows Drive app). They aren't part of *My Drive*. rclone can reach *Shared with me* with the `--drive-shared-with-me` option, for example in a second, separate sync, but this guide doesn't cover that.
+
+**1. Check that your Drive fits on the disk:**
+
+```bash
+rclone size gdrive: --drive-skip-gdocs --drive-skip-shortcuts --fast-list
+df -h ~
+```
+
+The first command prints the total size of your Drive, the second the free space on your disk (*Avail*). Leave at least 20 % of the disk free after the sync. If it doesn't fit, sync one folder instead: replace `gdrive:` everywhere below with e.g. `gdrive:Documents`, a folder that exists and isn't empty.
+
+**2. Create the local folder and do a dry run** (shows what would happen, changes nothing):
 
 ```bash
 mkdir -p ~/GoogleDriveSync
-rclone mkdir gdrive:Laptop
-echo "Synced with Google Drive by rclone bisync." > ~/GoogleDriveSync/README.txt
-rclone bisync gdrive:Laptop ~/GoogleDriveSync \
-    --resync --drive-skip-gdocs --dry-run
+rclone bisync gdrive: ~/GoogleDriveSync \
+    --resync --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
+    --dry-run
 ```
 
-> **Why the `README.txt`?** Bisync refuses to work when a side was **completely empty** at the last run. That's a safety check: an empty folder usually means a missing drive or a failed login, and syncing it would delete everything on the other side. If you start with two new, empty folders, every run fails with *"Empty prior Path1 listing. Cannot sync to an empty directory"*. One small file avoids that. Keep it, or any other file, in the folder for good.
+The local folder must be **new and empty**, or hold only files you want uploaded to the top of your Drive. Don't use `~/GoogleDrive`, which is the mount point from 1.4.
 
-**2. The first real run.** `--resync` is needed **only the first time**. It makes both sides contain everything from both sides:
+**3. The first real run.** `--resync` is needed **only the first time**. It downloads everything, so with a big Drive it can take hours; leave the terminal open and the laptop plugged in and awake:
 
 ```bash
-rclone bisync gdrive:Laptop ~/GoogleDriveSync \
-    --resync --drive-skip-gdocs --verbose
+rclone bisync gdrive: ~/GoogleDriveSync \
+    --resync --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
+    --progress
 ```
 
-**3. Later runs** (this is the command the timer below runs):
+If it's interrupted, just run the same command again: files already downloaded are skipped.
+
+**4. Later runs** (this is the command the timer below runs):
 
 ```bash
-rclone bisync gdrive:Laptop ~/GoogleDriveSync \
-    --drive-skip-gdocs --resilient --recover \
-    --conflict-resolve newer --max-lock 2m --verbose
+rclone bisync gdrive: ~/GoogleDriveSync \
+    --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
+    --resilient --recover --conflict-resolve newer --max-lock 2m \
+    --verbose
 ```
 
 What the options do:
 
 | Option | Why |
 |---|---|
-| `--drive-skip-gdocs` | Skips Google Docs, Sheets and Slides. They aren't real files, and syncing them as exported `.docx`/`.xlsx` copies leads to confusing duplicates. Keep using them in the browser |
+| `--drive-skip-gdocs`, `--drive-skip-shortcuts` | See *What's not included* above |
+| `--fast-list` | Lists the whole Drive in a few big requests instead of one per folder. Much faster for a whole Drive |
 | `--resilient --recover` | After an interrupted run (lost Wi-Fi, laptop shut down), continue normally next time instead of stopping and asking for `--resync` |
 | `--conflict-resolve newer` | If a file changed on both sides, keep the newer one. The other is kept too, renamed with `.conflict1` in its name |
 | `--max-lock 2m` | If a run crashed and left a lock file, ignore it after 2 minutes |
 
-**4. Run it automatically every 15 minutes** with a systemd timer. Create two files:
+> **Bisync refuses to work if a side is completely empty**, with *"Empty prior Path1 listing. Cannot sync to an empty directory"*. That's a safety check: an empty folder usually means a missing drive or a failed login, and syncing it would delete everything on the other side. It only bites if your Drive (or the folder you chose) is empty: put one file in it, then repeat step 3.
+
+**5. Run it automatically every 15 minutes** with a systemd timer. Create two files:
 
 ```bash
 nano ~/.config/systemd/user/rclone-gdrive-bisync.service
@@ -309,13 +324,13 @@ nano ~/.config/systemd/user/rclone-gdrive-bisync.service
 
 ```ini
 [Unit]
-Description=Two-way sync of Google Drive "Laptop" with ~/GoogleDriveSync
+Description=Two-way sync of Google Drive with ~/GoogleDriveSync
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/rclone bisync gdrive:Laptop %h/GoogleDriveSync \
-    --drive-skip-gdocs --resilient --recover \
-    --conflict-resolve newer --max-lock 2m \
+ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDriveSync \
+    --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
+    --resilient --recover --conflict-resolve newer --max-lock 2m \
     --log-file %h/.cache/rclone-gdrive-bisync.log --log-level INFO
 ```
 
@@ -344,11 +359,14 @@ systemctl --user list-timers                       # shows the next run
 tail -n 20 ~/.cache/rclone-gdrive-bisync.log       # what the last run did
 ```
 
+A run can't start while the previous one is still going, so a slow run never overlaps the next.
+
 Rules of thumb:
 
 - 🔁 **Run the sync by hand before you shut down** if you changed something in the last 15 minutes: `systemctl --user start rclone-gdrive-bisync.service`.
 - 🔑 **If the log shows `invalid_grant`**, your Google sign-in expired, usually because the app is still in *Testing* (see 1.3, Step 1, item 7). Run `rclone config reconnect gdrive:` and the sync resumes on its next run.
 - 🛑 **Bisync refuses to delete more than half the files in one run.** That's a safety check, not a bug. If you really did delete that much, run it once by hand with `--force`.
+- 🔀 **To change what's synced later** (e.g. from the whole Drive to one folder), use a new, empty local folder, repeat steps 2 and 3 with the new names, and update the service file in step 5.
 - 🔐 **For sensitive files**, put a [Cryptomator](https://cryptomator.org) vault inside `~/GoogleDriveSync`. Google then only sees encrypted files. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md#key-decisions-and-why) explains this setup, including the Android side.
 
 ### 1.6 Paid alternative: Insync
@@ -467,8 +485,8 @@ If Ubuntu runs from the external drive ([GUIDE.md](GUIDE.md)):
 | `didn't find section in config file` | The remote name in the command doesn't match the one you created | `rclone listremotes` shows the names. Use them with the colon, e.g. `gdrive:` |
 | `~/GoogleDrive` shows *"Transport endpoint is not connected"* | rclone stopped or crashed while mounted | `fusermount3 -uz ~/GoogleDrive`, then `systemctl --user restart rclone-gdrive.service` |
 | Mount service fails right after login | No network yet | It retries every 30 s. Check with `journalctl --user -u rclone-gdrive.service` |
-| Bisync stops with *"Empty prior Path1 listing. Cannot sync to an empty directory"* (or *Path2*) | Both folders were empty at the first (`--resync`) run, or one side has since become completely empty | Put a file in the folder (e.g. the `README.txt` from 1.5 step 1), then run the first-run command from 1.5 step 2 again (with `--resync`) |
-| Bisync stops with *"cannot find prior listings"* or *"must run --resync"* | First run, or the state files were lost | Run the first-run command from 1.5 step 2 again (with `--resync`) |
+| Bisync stops with *"Empty prior Path1 listing. Cannot sync to an empty directory"* (or *Path2*) | Both folders were empty at the first (`--resync`) run, or one side has since become completely empty | Put a file in the empty side, then run the first-run command from 1.5 step 3 again (with `--resync`) |
+| Bisync stops with *"cannot find prior listings"* or *"must run --resync"* | First run, or the state files were lost | Run the first-run command from 1.5 step 3 again (with `--resync`) |
 | Bisync stops with *"too many deletes"* | More than half the files would be deleted | Check that it's intended, then run once by hand with `--force` |
 | Files named `….conflict1` appear | The same file changed on two devices between syncs | Compare them, keep the right one, delete the other |
 | Google transfers are slow, or `rateLimitExceeded` / `403` errors | You're over Google's per-user speed limit, or the remote still uses rclone's shared client ID | Normal now and then during big transfers. If `rclone config show gdrive` shows no `client_id`, switch to your own (end of [1.3](#13-connect-rclone-to-google-drive)) |
