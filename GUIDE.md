@@ -751,7 +751,7 @@ This changes a setting in the laptop's firmware, not anything on the internal di
    Boot0003* ubuntu                HD(1,GPT,7a9e…,…)/\EFI\ubuntu\shimx64.efi
    Boot0001* UEFI: ORICO …
    ```
-2. **Find the `ubuntu` entry that points to the USB drive.** Print the ID of the USB drive's EFI partition:
+2. **Find the `ubuntu` entry that points to the USB drive.** (It may be spelled `Ubuntu`; on a UX8406MA with 26.04 it was.) Print the ID of the USB drive's EFI partition:
    ```bash
    lsblk -no PARTUUID "$(findmnt -no SOURCE /boot/efi)"
    ```
