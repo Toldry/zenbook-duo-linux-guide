@@ -687,7 +687,12 @@ On a UX8406MA it matched the file `DEV_0294_SUBSYS_10431C43_PCI_SUBSYS_1C431043.
 5. **Compare:** play music and toggle EasyEffects' global bypass button. The tuned sound should be clearly fuller and louder.
 6. **Unmount the Windows partition** in Files (the eject icon). The presets live in `~/.local/share/easyeffects/` now.
 
-**Match the mode you used on Windows (optional).** Dolby's tuning file has 9 sound modes, and the tool picks *dynamic* by default. To see which one Windows uses, open the **Dolby Access** app on Windows (Start → type *Dolby*), with the built-in speakers as the output: the highlighted profile (*Dynamic*, *Movie*, *Music*, *Game*, *Voice*…) is the mode, and *Intelligent Equalizer* shows Balanced, Detailed or Warm. Then, with the Windows partition mounted again:
+**Match the mode you used on Windows (optional).** Dolby's tuning file has 9 sound modes, and the tool picks *dynamic* by default. To see which one Windows uses, open the **Dolby Access** app on Windows (Start → type *Dolby*), with the built-in speakers as the output, and go to **Settings → Dolby Atmos**. These are two separate choices:
+
+- **The profile** (the mode) is the entry with a ✔ in the left-hand list: *Dynamic*, *Game*, *Movie*, *Music*, *Voice* or *Custom 1–3*. This is what `--profile` sets.
+- **The intelligent equalizer** (*Detailed*, *Balanced*, *Warm* or *Off*), underlined on the right, picks one of the three presets the tool builds for each profile. Choose that preset in EasyEffects.
+
+Then, with the Windows partition mounted again:
 
 ```bash
 python3 dolby_to_easyeffects.py --list                       # names of the 9 modes
