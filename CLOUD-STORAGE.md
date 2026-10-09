@@ -259,7 +259,11 @@ What to expect: still **no offline access**. If the network drops, the folder ha
 
 `rclone bisync` ("bidirectional sync") keeps a local folder and a cloud folder the same: changes on either side are copied to the other. It's the closest thing to the Windows Drive app.
 
-> **Sync one folder, not the whole Drive.** Pick a folder for the files you use on this laptop, e.g. `Laptop` in your Drive. A whole Drive can be bigger than the USB drive, and a smaller sync is quicker and safer.
+> **Sync one folder, not the whole Drive.** The commands below sync a **new, empty** Drive folder called `Laptop`: at first it holds nothing, and only what you put in it (on either side) gets synced. To sync files you already have, either move them into `Laptop` (in the Drive web app, or by copying them into `~/GoogleDriveSync`), or replace `gdrive:Laptop` everywhere below with an existing folder, e.g. `gdrive:Documents`.
+>
+> You can also sync the whole Drive with `gdrive:` (no folder name), but first check that it fits: `rclone size gdrive: --drive-skip-gdocs` prints its total size. A whole Drive can be bigger than the USB drive, and a smaller sync is quicker and safer.
+>
+> To change the folder later, use a new, empty local folder and repeat steps 1 and 2 (including `--resync`) with the new names, and update the service file in step 4.
 
 **1. Create the folders, put a file in, and do a dry run** (shows what would happen, changes nothing):
 
