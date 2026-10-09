@@ -500,9 +500,20 @@ The target drive needs exactly **two** partitions:
 
 ### 6.5 Finish the install
 
-1. **Time zone** → **Create your account** (pick a strong password; you'll type it often).
-2. Click **Install**. It takes 10–40 minutes depending on the USB drive's speed.
-3. When it's done, click **Restart now**. Remove **only the installer stick #1** when asked, and **leave the target drive #2 plugged in**.
+1. **Create your account** (the screen right after partitioning):
+
+   | Field | What to do |
+   |---|---|
+   | **Your name** | Anything; it's only shown on the login screen |
+   | **Your computer's name** | Filled in automatically from your name; change it if you like. It's how the laptop appears on your network |
+   | **Your username** | Short and lowercase; it becomes your home folder's name (`/home/<username>`) |
+   | **Password** | A strong one. You'll type it often, including for every `sudo` command |
+   | **Require my password to log in** | Keep it **on**. Otherwise anyone who picks up the laptop gets straight in |
+   | **Use Active Directory** | Keep it **unchecked**. It's only for joining a company's Windows network (a "domain"), where an IT department manages the accounts. Checking it makes the installer ask for a domain to join, which a home laptop doesn't have |
+
+2. **Time zone:** pick your city.
+3. **Review your choices,** then click **Install**. It takes 10–40 minutes depending on the USB drive's speed.
+4. When it's done, click **Restart now**. Remove **only the installer stick #1** when asked, and **leave the target drive #2 plugged in**.
 
 ---
 
