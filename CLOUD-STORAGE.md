@@ -261,14 +261,17 @@ What to expect: still **no offline access**. If the network drops, the folder ha
 
 > **Sync one folder, not the whole Drive.** Pick a folder for the files you use on this laptop, e.g. `Laptop` in your Drive. A whole Drive can be bigger than the USB drive, and a smaller sync is quicker and safer.
 
-**1. Create the folders and do a dry run** (shows what would happen, changes nothing):
+**1. Create the folders, put a file in, and do a dry run** (shows what would happen, changes nothing):
 
 ```bash
 mkdir -p ~/GoogleDriveSync
 rclone mkdir gdrive:Laptop
+echo "Synced with Google Drive by rclone bisync." > ~/GoogleDriveSync/README.txt
 rclone bisync gdrive:Laptop ~/GoogleDriveSync \
     --resync --drive-skip-gdocs --dry-run
 ```
+
+> **Why the `README.txt`?** Bisync refuses to work when a side was **completely empty** at the last run. That's a safety check: an empty folder usually means a missing drive or a failed login, and syncing it would delete everything on the other side. If you start with two new, empty folders, every run fails with *"Empty prior Path1 listing. Cannot sync to an empty directory"*. One small file avoids that. Keep it, or any other file, in the folder for good.
 
 **2. The first real run.** `--resync` is needed **only the first time**. It makes both sides contain everything from both sides:
 
@@ -460,6 +463,7 @@ If Ubuntu runs from the external drive ([GUIDE.md](GUIDE.md)):
 | `didn't find section in config file` | The remote name in the command doesn't match the one you created | `rclone listremotes` shows the names. Use them with the colon, e.g. `gdrive:` |
 | `~/GoogleDrive` shows *"Transport endpoint is not connected"* | rclone stopped or crashed while mounted | `fusermount3 -uz ~/GoogleDrive`, then `systemctl --user restart rclone-gdrive.service` |
 | Mount service fails right after login | No network yet | It retries every 30 s. Check with `journalctl --user -u rclone-gdrive.service` |
+| Bisync stops with *"Empty prior Path1 listing. Cannot sync to an empty directory"* (or *Path2*) | Both folders were empty at the first (`--resync`) run, or one side has since become completely empty | Put a file in the folder (e.g. the `README.txt` from 1.5 step 1), then run the first-run command from 1.5 step 2 again (with `--resync`) |
 | Bisync stops with *"cannot find prior listings"* or *"must run --resync"* | First run, or the state files were lost | Run the first-run command from 1.5 step 2 again (with `--resync`) |
 | Bisync stops with *"too many deletes"* | More than half the files would be deleted | Check that it's intended, then run once by hand with `--force` |
 | Files named `….conflict1` appear | The same file changed on two devices between syncs | Compare them, keep the right one, delete the other |
