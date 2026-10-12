@@ -6,8 +6,10 @@ image per monitor, joins them into one image laid out like the monitors, and
 sets it with GNOME's "spanned" mode, so each monitor shows its own part.
 
 Run without arguments, it keeps running: it changes the pictures once per day
-and rebuilds the image right away when the monitor layout changes (for
-example when the Zenbook Duo's keyboard is attached or removed).
+and rebuilds the image right away when GNOME reports a monitor change: a
+screen turning on or off, rotating, or changing scale. On the Zenbook Duo,
+that happens when the add-on switches the lower screen off or on as the
+keyboard is attached or removed.
 
 See DAILY-WALLPAPER.md in the repository for installation and configuration.
 """

@@ -4,7 +4,7 @@ A small program that gives each of the Zenbook Duo's screens its own wallpaper, 
 
 > **Who this is for:** anyone running Ubuntu with GNOME (the default desktop) from [GUIDE.md](GUIDE.md) or [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md) who wants changing wallpapers on both screens.
 >
-> **Status:** written in October 2026 for Ubuntu 24.04 (GNOME 46). It was tested against a simulated GNOME display service: two screens, the keyboard attached and removed, rotated screens, 200 % scaling and a new day. It has not yet been run on a real Duo, so please [report problems](https://github.com/Toldry/zenbook-duo-linux-guide/issues).
+> **Status:** written in October 2026 for Ubuntu 24.04 (GNOME 46). It was tested against a simulated GNOME display service: two screens, one screen turning off and on again, rotated screens, 200 % scaling and a new day. It has not yet been run on a real Duo, so please [report problems](https://github.com/Toldry/zenbook-duo-linux-guide/issues).
 
 ---
 
@@ -44,7 +44,9 @@ The existing tools didn't fit:
 - Picks **one image per screen** from your wallpaper folder, at random.
 - **Shuffles without repeats:** every image is shown once before any comes back, and the two screens never show the same image on the same day (unless the folder has only one image).
 - **Changes once a day,** at a time you choose (midnight by default). It also catches up after the laptop wakes from sleep.
-- **Follows the keyboard:** when you put the keyboard on the lower screen and that screen turns off, the top screen gets a full image within about 2 seconds. When you take the keyboard off, the lower screen gets today's picture back. Rotating the laptop works the same way.
+- **Follows screen changes:** whenever a screen turns on or off, rotates, changes scaling, or an external monitor is plugged in or out, the image is rebuilt for the new layout within about 2 seconds. A screen that comes back gets today's picture back.
+
+  On the Duo, the usual trigger is the keyboard. The program doesn't watch the keyboard itself. When you lay the keyboard on the lower screen, the [Duo add-on](GUIDE.md#83-install-the-zenbook-duo-add-on) turns that screen off, and the program reacts to the screen turning off. Without the add-on the lower screen stays on, and the wallpaper doesn't change either.
 - Keeps full sharpness at the Duo's 200 % scaling, and fills each screen without stretching. Images are scaled and cropped from the center.
 
 ```mermaid
@@ -54,7 +56,7 @@ flowchart LR
     layout["Screen layout<br/>(asked from GNOME)"] --> join
     picks --> join["Join into one image<br/>laid out like the screens"]
     join -->|"spanned mode"| gnome["GNOME shows<br/>A on top, B below"]
-    keyboard["Keyboard attached<br/>or removed"] -.->|"layout changed"| layout
+    keyboard["Keyboard attached or removed<br/>→ add-on turns lower screen off/on"] -.->|"monitors changed"| layout
 ```
 
 ---

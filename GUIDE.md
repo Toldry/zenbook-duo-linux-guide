@@ -688,7 +688,7 @@ Neither Google nor Proton makes a desktop sync app for Linux yet. [CLOUD-STORAGE
 
 ### A different wallpaper on each screen
 
-GNOME has one wallpaper setting for all screens and no slideshow. [DAILY-WALLPAPER.md](DAILY-WALLPAPER.md) installs a small background program that gives each of the Duo's screens its own picture, shuffled from a folder and changed once a day. It also adjusts when you attach or remove the keyboard.
+GNOME has one wallpaper setting for all screens and no slideshow. [DAILY-WALLPAPER.md](DAILY-WALLPAPER.md) installs a small background program that gives each of the Duo's screens its own picture, shuffled from a folder and changed once a day. It also adjusts when a screen turns on or off, for example when the add-on switches off the lower screen because you laid the keyboard on it.
 
 ---
 
