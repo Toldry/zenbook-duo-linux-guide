@@ -1,0 +1,13 @@
+[Unit]
+Description=Different shuffled wallpaper per monitor, changed daily
+Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/DAILY-WALLPAPER.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/daily-wallpaper
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

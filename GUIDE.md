@@ -52,6 +52,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [Battery care if Ubuntu becomes your main OS](#battery-care-if-ubuntu-becomes-your-main-os)
    - [Moving Ubuntu to the internal disk later](#moving-ubuntu-to-the-internal-disk-later)
    - [Google Drive and Proton Drive](#google-drive-and-proton-drive)
+   - [A different wallpaper on each screen](#a-different-wallpaper-on-each-screen)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -684,6 +685,10 @@ Once Ubuntu works well from the USB drive, you may want it on the internal SSD n
 ### Google Drive and Proton Drive
 
 Neither Google nor Proton makes a desktop sync app for Linux yet. [CLOUD-STORAGE.md](CLOUD-STORAGE.md) shows how to get your files anyway: browsing Google Drive in the Files app, mounting or syncing it with rclone, and Proton Drive through its web app, Proton's command-line tool or rclone.
+
+### A different wallpaper on each screen
+
+GNOME has one wallpaper setting for all screens and no slideshow. [DAILY-WALLPAPER.md](DAILY-WALLPAPER.md) installs a small background program that gives each of the Duo's screens its own picture, shuffled from a folder and changed once a day. It also adjusts when you attach or remove the keyboard.
 
 ---
 
