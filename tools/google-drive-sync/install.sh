@@ -31,7 +31,7 @@ install -D --mode=644 "$source_dir/rclone-gdrive-bisync.service" \
     "$HOME/.config/systemd/user/rclone-gdrive-bisync.service"
 install -D --mode=644 "$source_dir/rclone-gdrive-bisync.timer" \
     "$HOME/.config/systemd/user/rclone-gdrive-bisync.timer"
-install -D --mode=755 "$source_dir/sync-google-drive.sh" "$executable"
+install -D --mode=755 "$source_dir/sync-google-drive.py" "$executable"
 install -D --mode=644 "$source_dir/sync-google-drive.svg" "$icon"
 
 # App entries need absolute paths; they don't understand "~" or "$HOME".

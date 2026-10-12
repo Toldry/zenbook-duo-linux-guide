@@ -321,7 +321,7 @@ What the options do:
 **5. Install automatic syncing and a "Sync Google Drive" button.** An installer in this repository, in [`tools/google-drive-sync/`](tools/google-drive-sync/), sets up two things:
 
 - A **timer** that runs the command from step 4 every 15 minutes, starting 3 minutes after you log in. Its log goes to `~/.cache/rclone-gdrive-bisync.log`.
-- A **Sync Google Drive** app, pinned to the Dock, for syncing right away: click it on the Dock, or press **Super**, type `sync google`, and press **Enter**. It shows a notification when the sync starts and when it's done (or failed).
+- A **Sync Google Drive** app, pinned to the Dock, for syncing right away: click it on the Dock, or press **Super**, type `sync google`, and press **Enter**. It shows a notification when the sync starts, and when it's done one that says what changed.
 
 Get the repository, if you don't have it yet, and run the installer:
 
@@ -337,7 +337,7 @@ It checks that rclone, the `gdrive` remote and `~/GoogleDriveSync` exist, so do 
 |---|---|
 | `~/.config/systemd/user/rclone-gdrive-bisync.service` | The sync command from step 4, as a *systemd user service*: a background job that belongs to your account, no `sudo` needed |
 | `~/.config/systemd/user/rclone-gdrive-bisync.timer` | Starts that service every 15 minutes |
-| `~/.local/bin/sync-google-drive` | The script the app runs: starts the service now and shows notifications |
+| `~/.local/bin/sync-google-drive` | The program the app runs: starts the service now, then reads that run's part of the log and shows what changed |
 | `~/.local/share/applications/sync-google-drive.desktop` | The app entry that makes it appear in the app search |
 | `~/.local/share/icons/hicolor/scalable/apps/sync-google-drive.svg` | Its icon |
 
@@ -348,7 +348,21 @@ systemctl --user list-timers                       # shows the next run
 tail -n 20 ~/.cache/rclone-gdrive-bisync.log       # what the last run did
 ```
 
-Then click **Sync Google Drive** on the Dock: a *"Syncing Google Drive…"* notification appears, then *"Google Drive is in sync"*. With a whole Drive, the second one can take a minute or two even when nothing changed, because rclone lists every file first.
+Then click **Sync Google Drive** on the Dock: a *"Syncing Google Drive…"* notification appears, then *"Google Drive is in sync"* with a summary. With a whole Drive, the second one can take a minute or two even when nothing changed, because rclone lists every file first.
+
+The summary counts the files added, updated and deleted in each direction. When a sync changed 6 files or fewer, it also lists them (↓ = downloaded to this computer, ↑ = uploaded to Google Drive):
+
+```
+Google Drive is in sync
+From Google Drive: 1 added, 1 deleted
+To Google Drive: 1 updated
+↓ Photos/beach.jpg (added)
+↓ old.pdf (deleted)
+↑ Notes/todo.txt (updated)
+Finished at 14:05.
+```
+
+If the sync failed, the notification shows rclone's first error message instead. The full details are in the log.
 
 - A sync can't start while another one is still running. Clicking the button during a timer run waits for that run, then reports the result.
 - To sync a single folder instead of the whole Drive, change `gdrive:` and `~/GoogleDriveSync` in the installed `.service` file, then run `systemctl --user daemon-reload`. Running the installer again puts back the original.
