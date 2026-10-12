@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Google Drive two-way sync every 15 minutes
+Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/CLOUD-STORAGE.md
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

@@ -318,120 +318,54 @@ What the options do:
 
 > **Bisync refuses to work if a side is completely empty**, with *"Empty prior Path1 listing. Cannot sync to an empty directory"*. That's a safety check: an empty folder usually means a missing drive or a failed login, and syncing it would delete everything on the other side. It only bites if your Drive (or the folder you chose) is empty: put one file in it, then repeat step 3.
 
-**5. Run it automatically every 15 minutes** with a systemd timer. Create two files:
+**5. Install automatic syncing and a "Sync Google Drive" button.** An installer in this repository, in [`tools/google-drive-sync/`](tools/google-drive-sync/), sets up two things:
+
+- A **timer** that runs the command from step 4 every 15 minutes, starting 3 minutes after you log in. Its log goes to `~/.cache/rclone-gdrive-bisync.log`.
+- A **Sync Google Drive** app, pinned to the Dock, for syncing right away: click it on the Dock, or press **Super**, type `sync google`, and press **Enter**. It shows a notification when the sync starts and when it's done (or failed).
+
+Get the repository, if you don't have it yet, and run the installer:
 
 ```bash
-nano ~/.config/systemd/user/rclone-gdrive-bisync.service
+sudo apt install git
+git clone https://github.com/Toldry/zenbook-duo-linux-guide.git ~/zenbook-duo-linux-guide
+~/zenbook-duo-linux-guide/tools/google-drive-sync/install.sh
 ```
 
-```ini
-[Unit]
-Description=Two-way sync of Google Drive with ~/GoogleDriveSync
+It checks that rclone, the `gdrive` remote and `~/GoogleDriveSync` exist, so do steps 1–3 first. Then it installs:
 
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDriveSync \
-    --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
-    --resilient --recover --conflict-resolve newer --max-lock 2m \
-    --log-file %h/.cache/rclone-gdrive-bisync.log --log-level INFO
-```
+| File | What it is |
+|---|---|
+| `~/.config/systemd/user/rclone-gdrive-bisync.service` | The sync command from step 4, as a *systemd user service*: a background job that belongs to your account, no `sudo` needed |
+| `~/.config/systemd/user/rclone-gdrive-bisync.timer` | Starts that service every 15 minutes |
+| `~/.local/bin/sync-google-drive` | The script the app runs: starts the service now and shows notifications |
+| `~/.local/share/applications/sync-google-drive.desktop` | The app entry that makes it appear in the app search |
+| `~/.local/share/icons/hicolor/scalable/apps/sync-google-drive.svg` | Its icon |
+
+Check that it works:
 
 ```bash
-nano ~/.config/systemd/user/rclone-gdrive-bisync.timer
-```
-
-```ini
-[Unit]
-Description=Run the Google Drive two-way sync every 15 minutes
-
-[Timer]
-OnBootSec=3min
-OnUnitActiveSec=15min
-
-[Install]
-WantedBy=timers.target
-```
-
-Turn it on and check it:
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now rclone-gdrive-bisync.timer
 systemctl --user list-timers                       # shows the next run
 tail -n 20 ~/.cache/rclone-gdrive-bisync.log       # what the last run did
 ```
 
-A run can't start while the previous one is still going, so a slow run never overlaps the next.
+Then click **Sync Google Drive** on the Dock: a *"Syncing Google Drive…"* notification appears, then *"Google Drive is in sync"*. With a whole Drive, the second one can take a minute or two even when nothing changed, because rclone lists every file first.
 
-**6. Add a "Sync Google Drive" app** for syncing right away, without waiting for the timer. You'll be able to press **Super**, type *Sync Google Drive*, press **Enter**, or click its icon on the Dock. It runs the same sync as the timer (same settings, same log) and shows a notification when it starts and when it's done.
+- A sync can't start while another one is still running. Clicking the button during a timer run waits for that run, then reports the result.
+- To sync a single folder instead of the whole Drive, change `gdrive:` and `~/GoogleDriveSync` in the installed `.service` file, then run `systemctl --user daemon-reload`. Running the installer again puts back the original.
 
-Create the script that the app runs:
-
-```bash
-mkdir -p ~/.local/bin
-nano ~/.local/bin/sync-google-drive
-```
+**Updating later:**
 
 ```bash
-#!/usr/bin/env bash
-# Run the Google Drive two-way sync now and report the result.
-# Starts the same systemd service as the timer; if a sync is already
-# running, this waits for it to finish instead of starting a second one.
-
-app_name="Sync Google Drive"
-icon="emblem-synchronizing"
-log_file="$HOME/.cache/rclone-gdrive-bisync.log"
-
-notify-send --app-name="$app_name" --icon="$icon" \
-    "Syncing Google Drive…" "Started at $(date +%H:%M)."
-
-if systemctl --user start rclone-gdrive-bisync.service; then
-    notify-send --app-name="$app_name" --icon="$icon" \
-        "Google Drive is in sync" "Finished at $(date +%H:%M)."
-else
-    notify-send --app-name="$app_name" --icon="dialog-error" \
-        --urgency=critical \
-        "Google Drive sync failed" "Details: $log_file"
-fi
+cd ~/zenbook-duo-linux-guide && git pull
+./tools/google-drive-sync/install.sh
 ```
-
-Make it runnable, then create the app entry. Copy the whole block, including the `EOF` line; it fills in your home folder's real path, which app entries need:
-
-```bash
-chmod +x ~/.local/bin/sync-google-drive
-
-mkdir -p ~/.local/share/applications
-cat > ~/.local/share/applications/sync-google-drive.desktop <<EOF
-[Desktop Entry]
-Type=Application
-Name=Sync Google Drive
-Comment=Two-way sync of Google Drive with ~/GoogleDriveSync, now
-Exec=$HOME/.local/bin/sync-google-drive
-Icon=emblem-synchronizing
-Terminal=false
-StartupNotify=false
-Categories=Utility;
-Keywords=gdrive;rclone;bisync;cloud;
-EOF
-
-desktop-file-validate ~/.local/share/applications/sync-google-drive.desktop
-```
-
-`desktop-file-validate` prints nothing if the entry is fine. (If it says *command not found*, skip it; it only checks the file.)
-
-**Try it:** press **Super**, type `sync google`, press **Enter**. A *"Syncing Google Drive…"* notification appears, then *"Google Drive is in sync"* when it's done. The first one can take a few seconds to show up in the search.
-
-**Put it on the Dock:** press **Super**, click **Show Apps** (the grid of dots at the bottom of the Dock), find **Sync Google Drive**, right-click it → **Pin to Dash**. From then on, one click on the Dock icon syncs.
-
-- If the icon is blank, change `Icon=emblem-synchronizing` in the `.desktop` file to `Icon=view-refresh`, and the same in the script.
-- Clicking it while a sync is already running doesn't start a second one. It waits for the running one, then says *"in sync"*.
 
 Rules of thumb:
 
-- 🔁 **Sync by hand before you shut down** if you changed something in the last 15 minutes: click **Sync Google Drive** on the Dock (step 6), or run `systemctl --user start rclone-gdrive-bisync.service`.
+- 🔁 **Sync by hand before you shut down** if you changed something in the last 15 minutes: click **Sync Google Drive** on the Dock (step 5), or run `systemctl --user start rclone-gdrive-bisync.service`.
 - 🔑 **If the log shows `invalid_grant`**, your Google sign-in expired, usually because the app is still in *Testing* (see 1.3, Step 1, item 7). Run `rclone config reconnect gdrive:` and the sync resumes on its next run.
 - 🛑 **Bisync refuses to delete more than half the files in one run.** That's a safety check, not a bug. If you really did delete that much, run it once by hand with `--force`.
-- 🔀 **To change what's synced later** (e.g. from the whole Drive to one folder), use a new, empty local folder, repeat steps 2 and 3 with the new names, and update the service file in step 5.
+- 🔀 **To change what's synced later** (e.g. from the whole Drive to one folder), use a new, empty local folder, repeat steps 2 and 3 with the new names, and edit the installed service file (see step 5).
 - 🔐 **For sensitive files**, put a [Cryptomator](https://cryptomator.org) vault inside `~/GoogleDriveSync`. Google then only sees encrypted files. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md#key-decisions-and-why) explains this setup, including the Android side.
 
 ### 1.6 Paid alternative: Insync
@@ -568,14 +502,14 @@ If Ubuntu runs from the external drive ([GUIDE.md](GUIDE.md)):
 
 Nothing here touches your cloud files unless you delete them yourself.
 
-1. **Stop the services and timers:**
+1. **Remove the sync timer, the Sync Google Drive app and the mount service:**
    ```bash
-   systemctl --user disable --now rclone-gdrive-bisync.timer rclone-gdrive.service
-   rm ~/.config/systemd/user/rclone-gdrive*.{service,timer}
-   rm ~/.local/bin/sync-google-drive ~/.local/share/applications/sync-google-drive.desktop
+   ~/zenbook-duo-linux-guide/tools/google-drive-sync/uninstall.sh
+   systemctl --user disable --now rclone-gdrive.service
+   rm -f ~/.config/systemd/user/rclone-gdrive.service
    systemctl --user daemon-reload
    ```
-   (Same for `rclone-proton.service` if you created it.)
+   (Same for `rclone-proton.service` if you created it.) Your files in `~/GoogleDriveSync` and in Google Drive are kept.
 2. **Remove the rclone accounts:** `rclone config delete gdrive` and `rclone config delete proton`. Then revoke rclone's access at https://myaccount.google.com/permissions, and delete the `rclone` project at https://console.cloud.google.com (**IAM & Admin → Settings → Shut down**).
 3. **Remove rclone itself:** `sudo rm /usr/bin/rclone /usr/local/share/man/man1/rclone.1`.
 4. **Remove local copies** you no longer need, after checking they're also in the cloud: `~/GoogleDriveSync`, `~/.cache/rclone`.

@@ -1,0 +1,10 @@
+[Unit]
+Description=Two-way sync of Google Drive with ~/GoogleDriveSync
+Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/CLOUD-STORAGE.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rclone bisync gdrive: %h/GoogleDriveSync \
+    --drive-skip-gdocs --drive-skip-shortcuts --fast-list \
+    --resilient --recover --conflict-resolve newer --max-lock 2m \
+    --log-file %h/.cache/rclone-gdrive-bisync.log --log-level INFO

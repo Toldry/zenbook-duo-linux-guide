@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sync Google Drive
+Comment=Two-way sync of Google Drive with ~/GoogleDriveSync, now
+Exec=@EXECUTABLE@
+Icon=@ICON@
+Terminal=false
+StartupNotify=false
+Categories=Utility;
+Keywords=gdrive;rclone;bisync;cloud;

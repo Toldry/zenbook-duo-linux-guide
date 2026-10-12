@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Two arrows chasing each other in a circle: "sync". -->
+  <circle cx="64" cy="64" r="60" fill="#1a73e8"/>
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round">
+    <path d="M 98 56 A 35 35 0 0 0 36 42"/>
+    <path d="M 30 72 A 35 35 0 0 0 92 86"/>
+  </g>
+  <g fill="#ffffff">
+    <polygon points="22,30 50,34 30,56"/>
+    <polygon points="106,98 78,94 98,72"/>
+  </g>
+</svg>
