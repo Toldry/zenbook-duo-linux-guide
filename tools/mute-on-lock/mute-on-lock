@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Mutes the sound output while the GNOME screen is locked, and unmutes it
+# when the screen is unlocked. Output that was already muted before the
+# lock stays muted.
+set -uo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mute-on-lock"
+# Holds the PipeWire id of the output this program muted, while locked.
+muted_output_file="$state_dir/muted-output-id"
+mkdir -p "$state_dir"
+
+screensaver_args=(--session --dest org.gnome.ScreenSaver
+    --object-path /org/gnome/ScreenSaver)
+
+default_output_id() {
+    # The first line of `wpctl inspect` reads "id 52, type PipeWire:...".
+    wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null \
+        | awk 'NR == 1 && $1 == "id" { sub(",", "", $2); print $2 }'
+}
+
+mute_on_lock() {
+    if [[ -f $muted_output_file ]]; then
+        return  # Already muted by this program during the current lock.
+    fi
+    local output_id
+    output_id=$(default_output_id)
+    if [[ -z $output_id ]]; then
+        echo "Locked: no sound output found, nothing to mute"
+        return
+    fi
+    if wpctl get-volume "$output_id" | grep -q MUTED; then
+        echo "Locked: output $output_id was already muted, leaving it so"
+        return
+    fi
+    wpctl set-mute "$output_id" 1
+    echo "$output_id" > "$muted_output_file"
+    echo "Locked: muted output $output_id"
+}
+
+unmute_on_unlock() {
+    if [[ ! -f $muted_output_file ]]; then
+        return  # This program didn't mute anything.
+    fi
+    local output_id
+    output_id=$(< "$muted_output_file")
+    rm -f "$muted_output_file"
+    if wpctl set-mute "$output_id" 0 2>/dev/null; then
+        echo "Unlocked: unmuted output $output_id"
+    else
+        echo "Unlocked: output $output_id is gone, nothing to unmute"
+    fi
+}
+
+# Catch up on a lock that ended while this program wasn't running, for
+# example a crash or a power cut while locked.
+if gdbus call "${screensaver_args[@]}" \
+        --method org.gnome.ScreenSaver.GetActive 2>/dev/null \
+        | grep -q false; then
+    unmute_on_unlock
+fi
+
+# GNOME announces every lock and unlock as a D-Bus signal, printed as:
+#   /org/gnome/ScreenSaver: org.gnome.ScreenSaver.ActiveChanged (true,)
+gdbus monitor "${screensaver_args[@]}" | while read -r line; do
+    case $line in
+        *ScreenSaver.ActiveChanged*true*) mute_on_lock ;;
+        *ScreenSaver.ActiveChanged*false*) unmute_on_unlock ;;
+    esac
+done
+
+echo "Lost the connection to GNOME's screen lock" >&2
+exit 1

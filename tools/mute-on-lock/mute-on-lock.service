@@ -1,0 +1,13 @@
+[Unit]
+Description=Mute the sound while the screen is locked
+Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/MUTE-ON-LOCK.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/mute-on-lock
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

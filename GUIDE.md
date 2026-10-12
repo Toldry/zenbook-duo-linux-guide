@@ -54,6 +54,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [Google Drive and Proton Drive](#google-drive-and-proton-drive)
    - [A different wallpaper on each screen](#a-different-wallpaper-on-each-screen)
    - [An ISO date and 24-hour clock in the top bar](#an-iso-date-and-24-hour-clock-in-the-top-bar)
+   - [Mute the sound while the screen is locked](#mute-the-sound-while-the-screen-is-locked)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -694,6 +695,10 @@ GNOME has one wallpaper setting for all screens and no slideshow. [DAILY-WALLPAP
 ### An ISO date and 24-hour clock in the top bar
 
 GNOME's clock settings can't show the date as `2026-10-12`. [PANEL-CLOCK.md](PANEL-CLOCK.md) installs a small extension and sets the top-bar clock to any format you like, for example `2026-10-12              23:53`. No extra program is needed.
+
+### Mute the sound while the screen is locked
+
+GNOME has no setting to go quiet when you lock the screen. [MUTE-ON-LOCK.md](MUTE-ON-LOCK.md) installs a small background program that mutes the sound when you press `Super+L` (or the laptop locks itself) and unmutes it when you unlock, unless you had muted it yourself before.
 
 ---
 
