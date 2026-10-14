@@ -87,8 +87,8 @@ flatpak install flathub io.github.xiaoyifang.goldendict_ng
 The Flatpak can't see your home folder by default, so give it read access to the folder where the dictionaries will go (step 2):
 
 ```bash
-mkdir -p ~/Dictionaries
-flatpak override --user --filesystem=~/Dictionaries:ro io.github.xiaoyifang.goldendict_ng
+mkdir -p ~/.local/share/dictionaries
+flatpak override --user --filesystem=xdg-data/dictionaries:ro io.github.xiaoyifang.goldendict_ng
 ```
 
 It also can't read dictionaries installed with `apt` into `/usr/share`, so the optional WordNet step below doesn't apply to it.
@@ -107,11 +107,13 @@ GoldenDict-ng comes with no dictionaries. The easiest good ones for English, Spa
 
 ### Step 1: Download them
 
+They go in `~/.local/share/dictionaries`. Linux keeps a user's data files, the files programs read, under `~/.local/share`, as the XDG Base Directory standard says. GoldenDict-ng keeps its own settings and indexes next door, in `~/.local/share/goldendict`. Keep the dictionaries out of that folder, so they don't mix with files the app manages.
+
 About 27 MB in total:
 
 ```bash
-mkdir -p ~/Dictionaries
-cd ~/Dictionaries
+mkdir -p ~/.local/share/dictionaries
+cd ~/.local/share/dictionaries
 base="https://raw.githubusercontent.com/Vuizur/Wiktionary-Dictionaries/master"
 for language in English Spanish Hebrew; do
     file="${language}-English Wiktionary dictionary stardict.tar.gz"
@@ -145,9 +147,9 @@ sudo apt install dict-wn dict-moby-thesaurus
 
 1. Open **GoldenDict-ng**.
 2. Open the menu **Edit → Dictionaries** (or press `F3`).
-3. On the **Sources → Files** tab, click **Add…** and choose the `Dictionaries` folder in your home folder.
+3. On the **Sources → Files** tab, click **Add…**. The folder is hidden (its path starts with a dot), so type its path instead of clicking through: in GNOME's file picker, press `Ctrl+L`, type `~/.local/share/dictionaries` and press `Enter`.
 4. Tick **Recursive** next to it, so the subfolders are read.
-5. If you did step 2, click **Add…** again and choose `/usr/share/dictd`.
+5. If you did step 2, check whether `/usr/share/dictd` is in the list. GoldenDict-ng adds it by itself the first time it starts, but only if the folder exists then, and in this guide it didn't yet. If it's missing, click **Add…** again and choose `/usr/share/dictd`.
 6. Click **OK**. GoldenDict-ng indexes the dictionaries, which takes a few seconds the first time.
 
 Type `casa` into GoldenDict-ng's search box to check: the Spanish-English entry should appear.
@@ -266,7 +268,7 @@ Files it uses:
 | `~/.local/bin/goldendict-search-provider` | The provider |
 | `~/.local/share/dbus-1/services/io.github.toldry.GoldenDictSearch.service` | Tells D-Bus how to start the provider |
 | `/usr/local/share/gnome-shell/search-providers/goldendict-search-provider.ini` | Tells GNOME the provider exists and that it belongs to GoldenDict-ng |
-| `~/Dictionaries/` | The Wiktionary dictionaries |
+| `~/.local/share/dictionaries/` | The Wiktionary dictionaries |
 
 ---
 
@@ -317,7 +319,7 @@ To also remove GoldenDict-ng and the dictionaries:
 
 ```bash
 sudo apt remove goldendict-ng dict-wn dict-moby-thesaurus
-rm -r ~/Dictionaries
+rm -r ~/.local/share/dictionaries
 ```
 
 ---
@@ -330,6 +332,9 @@ rm -r ~/Dictionaries
 - Ubuntu 24.04's `goldendict-ng` package and its files: https://packages.ubuntu.com/noble/goldendict-ng
 - Wiktionary dictionaries in StarDict format: https://github.com/Vuizur/Wiktionary-Dictionaries
 - The Wiktionary data they're built from: https://kaikki.org/
+- Where Linux keeps a user's data files (`~/.local/share`): https://specifications.freedesktop.org/basedir-spec/latest/
+- GoldenDict-ng's own folder and the system dictionary folders it adds on first start: https://github.com/xiaoyifang/goldendict-ng/blob/staged/src/config.cc
+- Flatpak's `xdg-data/…` folder permission: https://docs.flatpak.org/en/latest/sandbox-permissions.html
 - WordNet: https://wordnet.princeton.edu/ and the Ubuntu package https://packages.ubuntu.com/noble/dict-wn
 - Writing a GNOME search provider: https://developer.gnome.org/documentation/tutorials/search-provider.html
 - How GNOME Shell finds search providers (system data folders only, `DesktopId`, `Version`): https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/gnome-46/js/ui/remoteSearch.js
