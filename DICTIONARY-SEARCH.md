@@ -59,20 +59,24 @@ sequenceDiagram
     GD-->>You: Window with every dictionary's entry for "hablar"
 ```
 
-What the overview shows for `Super`, `שלום`:
+What the overview shows for `Super`, `reaccion`:
 
 ```
 GoldenDict-ng
-  📖 שלום → שָׁלוֹם
-     he-en · Noun: (uncountable) peace · (uncountable, archaic) rest, quietude · …
-  📖 שלום → שָׁלוֹם
-     he-en · Interjection: hello (conventional greeting) · (dated) goodbye
-  📖 שלום → שָׁלוֹם
-     he-en · Proper noun: A title of God. · a male given name, Shalom
+  📖 reacción
+     es-es · Sustantivo femenino: Hecho o acción que se opone o resiste a otra, …
+  📖 reacción química
+     es-es · Locución sustantiva femenina: Proceso que involucra la rotura o la creación de …
+  📖 reacción estereoespecífica
+     es-es · Locución sustantiva: Reacción química en la que reactivos …
+  📖 avión a reacción
+     es-es · Locución sustantiva y masculina: Avión que es impulsado por uno o más motores a reacción.
 ```
 
-- **Up to 5 results**, the most GNOME shows per app. Only whole words match, not words that merely start with what you typed: exact headwords come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`).
-- **The start of the definition** is shown under each word: part of speech, then the senses separated by `·`. GNOME cuts it off at the end of the line.
+- **Up to 5 results**, the most GNOME shows per app. Only whole words match, not words that merely start with what you typed. Exact headwords come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`), then multi-word entries that contain the word anywhere (`reaccion` → `reacción química`, `avión a reacción`), those starting with it first.
+- **Accents are optional.** `reaccion` finds `reacción`, `pinguino` finds `pingüino` and `nino` finds `niño`. Hebrew works with or without vowel points (niqqud).
+- **One row per word.** When several dictionaries, or several entries of one dictionary, have the same word, they share a row: each dictionary's definition after its label, separated by `‖`, for example *intj: (informal) Hello, hi, hey. ‖ es-es · Interjección: Expresión de saludo…* for `hola`. This leaves more of the 5 rows for other words.
+- **The start of the definition** is shown under each word: part of speech, then the senses separated by `·`. GNOME cuts it off at the end of the line, so with several dictionaries in a row, the last one may not fit.
 - **Any language, any script.** Hebrew typed right to left works the same as English or Spanish. Switch keyboard layouts with `Super+Space` as usual.
 - **Nothing when nothing matches.** A search for an app name that isn't a word shows no GoldenDict-ng group.
 
@@ -326,7 +330,9 @@ GNOME's overview asks every search provider for results over D-Bus, using the `o
 | `.syn` | Other forms (`hablo`, `ran`) and which headword they belong to | Finds inflected forms |
 | `.dict.dz` | The articles, compressed in small independent chunks ("dictzip") | Unpacks only the chunk with the article |
 
-At start it notes where each word begins in the `.idx` and `.syn` files, which takes about 0.25 seconds for the three Wiktionary dictionaries. After that, each search takes about 5 to 10 milliseconds. The files are memory-mapped rather than read in, so they cost little memory.
+At start it notes where each word begins in the `.idx` and `.syn` files, and lists the words of every multi-word headword, without accents, in a small index (about 15,000 phrases). That takes about half a second for the four dictionaries. After that, each search takes under 1 millisecond.
+
+To make accents optional for single words, the provider also tries each spelling of what you typed with one accent added (`reaccion` → `réaccion`, `reáccion`, … `reacción`, `reaccíon`, …), and keeps the ones that exist. Spanish writes at most one accent per word, apart from `ñ` and `ü`, so this finds almost every word without a bigger index. The Hebrew dictionary's headwords have vowel points, and it lists the unpointed spellings as other forms, so `שלום` finds `שָׁלוֹם`. The files are memory-mapped rather than read in, so they cost little memory.
 
 The article is HTML. The provider turns it into one line: the part of speech, then the senses, separated by `·`, and further parts of speech after a `|`. It leaves out pronunciations, inflection tables, examples and synonym lists. It knows the layouts of both projects' files; for any other dictionary it shows the start of the article's text.
 
@@ -351,7 +357,8 @@ Files it uses:
 
 - **One line of definition.** The overview has room for a title and one line, so long entries are cut off. Open the word in GoldenDict-ng for the rest.
 - **StarDict only.** The overview only searches StarDict dictionaries in the two folders above. Dictionaries in other formats, such as WordNet's `dictd` files from step 2.2, still work in GoldenDict-ng but don't appear in the overview.
-- **Accents must match.** `arbol` doesn't find `árbol`. Only upper and lower case of the letters A to Z are ignored, as in StarDict itself. Hebrew works with or without vowel points (niqqud): the headwords are written without them, and the dictionary lists the pointed spellings as other forms.
+- **One missing accent at most.** Typing without accents finds words with one accent, `ñ` or `ü`, which covers nearly all Spanish words. A word with two (rare) needs at least one of them typed. For multi-word entries, all accents and Hebrew vowel points are ignored.
+- **The English dictionary has no multi-word entries**, so phrases only come from `en-es`, `es-es` and `he-en`.
 - **No spelling suggestions.** A misspelled word finds nothing in the overview. Click the GoldenDict-ng icon instead to look up exactly what you typed; GoldenDict-ng suggests close matches.
 - **The window may not come to the front.** If GoldenDict-ng is already open behind other windows, GNOME sometimes shows a *"GoldenDict-ng is ready"* notification instead of raising it. This is GNOME's protection against apps stealing focus. I'm not sure how often it happens with GoldenDict-ng; closing GoldenDict-ng after each lookup avoids it.
 - **The registration is for all users, the provider for one.** Other accounts on the laptop see GoldenDict-ng under **Search Results**, but it gives them no results until they run the installer too.

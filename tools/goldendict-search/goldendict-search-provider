@@ -15,6 +15,7 @@ import re
 import shutil
 import struct
 import subprocess
+import unicodedata
 import zlib
 from array import array
 from html.parser import HTMLParser
@@ -40,7 +41,8 @@ QUERY_PREFIX = ""
 
 # GNOME shows at most 5 results per app.
 MAX_RESULTS = 5
-MAX_DESCRIPTION_LENGTH = 200
+# Characters of definition per result, shared between its dictionaries.
+MAX_DESCRIPTION_LENGTH = 300
 IDLE_EXIT_SECONDS = 600
 
 INTERFACE_XML = """
@@ -234,14 +236,15 @@ class StarDictDictionary:
             ">I", self.synonyms.entry_data(synonym_number))
         return number
 
-    def summary(self, number):
+    def summary(self, number, max_length=MAX_DESCRIPTION_LENGTH):
         offset, size = struct.unpack(
             self.offset_format, self.index.entry_data(number))
         article = self.articles.read(offset, size)
         if not self.type_sequence:
             # Each field starts with its type letter; keep the first field.
             article = article[1:].split(b"\0", 1)[0]
-        return article_to_summary(article.decode("utf-8", "replace"))
+        return article_to_summary(
+            article.decode("utf-8", "replace"), max_length)
 
 
 def first_existing(base, suffixes):
@@ -346,7 +349,7 @@ def collapse_spaces(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def article_to_summary(article):
+def article_to_summary(article, max_length=MAX_DESCRIPTION_LENGTH):
     """Turn an HTML or plain-text article into one short line, e.g.
     "noun: peace · rest | intj: hello · goodbye"."""
     summarizer = ArticleSummarizer()
@@ -362,8 +365,8 @@ def article_to_summary(article):
     else:
         # Plain text, or a layout the summarizer doesn't know.
         text = collapse_spaces(html.unescape(re.sub(r"<[^>]+>", " ", article)))
-    if len(text) > MAX_DESCRIPTION_LENGTH:
-        text = text[:MAX_DESCRIPTION_LENGTH].rsplit(" ", 1)[0] + "…"
+    if len(text) > max_length:
+        text = text[:max_length].rsplit(" ", 1)[0] + "…"
     return text
 
 
@@ -376,6 +379,77 @@ def load_dictionaries():
             except (OSError, ValueError, struct.error) as error:
                 print(f"Skipping {ifo_path}: {error}", flush=True)
     return dictionaries
+
+
+# Letters that may carry an accent in Spanish, and their accented forms.
+ACCENTED_FORMS = {"a": "á", "e": "é", "i": "í", "o": "ó", "u": "úü",
+                  "n": "ñ"}
+
+
+def fold(text):
+    """Lower case without accents or Hebrew vowel points:
+    "Reacción" -> "reaccion", "שָׁלוֹם" -> "שלום"."""
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(character for character in decomposed
+                   if not unicodedata.combining(character)).casefold()
+
+
+def spelling_variants(query):
+    """The query, then each spelling with one accent added, so "reaccion"
+    also finds "reacción". Spanish words carry at most one written accent,
+    apart from ñ and ü."""
+    variants = [query]
+    if query.isascii():
+        for position, letter in enumerate(query.lower()):
+            for accented in ACCENTED_FORMS.get(letter, ""):
+                variants.append(
+                    query[:position] + accented + query[position + 1:])
+    return variants
+
+
+def phrase_words(phrase):
+    """The words of a multi-word headword, without accents and with
+    surrounding punctuation removed."""
+    words = (re.sub(r"^\W+|\W+$", "", word) for word in fold(phrase).split())
+    return [word for word in words if word]
+
+
+class PhraseIndex:
+    """Finds multi-word headwords ("reacción química") by any of their
+    words. Built at start; Wiktionary has few enough phrases for this to
+    take a fraction of a second."""
+
+    def __init__(self, dictionaries):
+        # Folded word -> [(position in phrase, phrase length, dictionary
+        # number, headword number)], best matches first.
+        self.phrases_by_word = {}
+        for dictionary_number, dictionary in enumerate(dictionaries):
+            data = dictionary.index.data
+            for headword_number, start in enumerate(dictionary.index.starts):
+                headword = data[start:data.find(b"\0", start)]
+                if b" " not in headword:
+                    continue
+                phrase = headword.decode("utf-8", "replace")
+                for position, word in enumerate(phrase_words(phrase)):
+                    self.phrases_by_word.setdefault(word, []).append(
+                        (position, len(phrase), dictionary_number,
+                         headword_number))
+        for phrases in self.phrases_by_word.values():
+            phrases.sort()
+
+    def matches(self, query):
+        """(dictionary number, headword number) of each phrase containing
+        the query as a whole word, those starting with it first."""
+        return [(dictionary_number, headword_number)
+                for _, _, dictionary_number, headword_number
+                in self.phrases_by_word.get(fold(query), [])]
+
+
+def display_name(typed_form, headword):
+    """"hola", or "hablo → hablar" for an inflected form."""
+    if typed_form.lower() == headword.lower():
+        return headword
+    return f"{typed_form} → {headword}"
 
 
 def query_from_terms(terms):
@@ -411,13 +485,15 @@ def goldendict_icon():
 
 
 class SearchProvider:
-    """Result identifiers look like "2:1534:hablo": dictionary number,
-    headword number, and the form you typed (shown when it differs)."""
+    """One result per headword, combining every dictionary's entries for
+    it. Result identifiers look like "hablo\t3:61089,3:61090": the form
+    you typed, then dictionary number:headword number for each entry."""
 
     def __init__(self, main_loop):
         self.main_loop = main_loop
         self.icon = goldendict_icon()
         self.dictionaries = load_dictionaries()
+        self.phrase_index = PhraseIndex(self.dictionaries)
         self.idle_timer_id = 0
         self.restart_idle_timer()
 
@@ -431,55 +507,83 @@ class SearchProvider:
         query = query_from_terms(terms)
         if not query:
             return []
-        results = []
-        seen = set()
+        # Headword -> [typed form, [(dictionary, headword) numbers]], so
+        # "hablo" and "habló" (tried because accents are optional) share
+        # one "hablar" row.
+        rows = {}
 
         def add(dictionary_number, headword_number, typed_form):
-            if (dictionary_number, headword_number) in seen:
-                return
-            seen.add((dictionary_number, headword_number))
-            results.append(
-                f"{dictionary_number}:{headword_number}:{typed_form}")
+            headword = self.dictionaries[dictionary_number].headword(
+                headword_number)
+            if headword not in rows:
+                if len(rows) >= MAX_RESULTS:
+                    return
+                rows[headword] = [typed_form, []]
+            entries = rows[headword][1]
+            if (dictionary_number, headword_number) not in entries:
+                entries.append((dictionary_number, headword_number))
 
         # Whole-word matches only: headwords first, then inflected forms
-        # ("hablo" -> "hablar").
+        # ("hablo" -> "hablar"), then phrases containing the word
+        # ("reacción química"). Accents are optional ("reaccion").
+        variants = spelling_variants(query)
         for number, dictionary in enumerate(self.dictionaries):
-            for headword_number in dictionary.index.matches(query):
-                add(number, headword_number, dictionary.headword(
-                    headword_number))
+            for variant in variants:
+                for headword_number in dictionary.index.matches(variant):
+                    add(number, headword_number,
+                        dictionary.headword(headword_number))
         for number, dictionary in enumerate(self.dictionaries):
             if dictionary.synonyms is None:
                 continue
-            for synonym_number in dictionary.synonyms.matches(query):
-                typed_form = dictionary.synonyms.word(synonym_number).decode(
-                    "utf-8", "replace")
-                add(number, dictionary.synonym_target(synonym_number),
-                    typed_form)
-        return results[:MAX_RESULTS]
+            for variant in variants:
+                for synonym_number in dictionary.synonyms.matches(variant):
+                    typed_form = dictionary.synonyms.word(
+                        synonym_number).decode("utf-8", "replace")
+                    add(number, dictionary.synonym_target(synonym_number),
+                        typed_form)
+        for number, headword_number in self.phrase_index.matches(query):
+            add(number, headword_number,
+                self.dictionaries[number].headword(headword_number))
+        return [
+            typed_form + "\t" + ",".join(
+                f"{dictionary_number}:{headword_number}"
+                for dictionary_number, headword_number in entries)
+            for typed_form, entries in rows.values()]
+
+    def entries_of(self, identifier):
+        typed_form, entries = identifier.split("\t", 1)
+        pairs = [entry.split(":") for entry in entries.split(",")]
+        return typed_form, [
+            (self.dictionaries[int(dictionary_number)], int(headword_number))
+            for dictionary_number, headword_number in pairs]
 
     def result_meta(self, identifier):
-        dictionary_number, headword_number, typed_form = identifier.split(
-            ":", 2)
-        dictionary = self.dictionaries[int(dictionary_number)]
-        headword = dictionary.headword(int(headword_number))
-        if typed_form.lower() == headword.lower():
-            name = headword
-        else:
-            name = f"{typed_form} → {headword}"
-        summary = dictionary.summary(int(headword_number))
-        if dictionary.name not in UNLABELED_DICTIONARIES:
-            summary = f"{dictionary.name} · {summary}"
+        typed_form, entries = self.entries_of(identifier)
+        first_dictionary, first_headword_number = entries[0]
+        name = display_name(
+            typed_form, first_dictionary.headword(first_headword_number))
+        # Share the line between the entries; GNOME cuts off the rest.
+        length_each = max(80, MAX_DESCRIPTION_LENGTH // len(entries))
+        parts = []
+        previous_dictionary = None
+        for dictionary, headword_number in entries:
+            summary = dictionary.summary(headword_number, length_each)
+            if (dictionary is not previous_dictionary
+                    and dictionary.name not in UNLABELED_DICTIONARIES):
+                summary = f"{dictionary.name} · {summary}"
+            parts.append(summary)
+            previous_dictionary = dictionary
         return {
             "id": GLib.Variant("s", identifier),
             "name": GLib.Variant("s", name),
-            "description": GLib.Variant("s", summary),
+            "description": GLib.Variant("s", " ‖ ".join(parts)),
             "gicon": GLib.Variant("s", self.icon),
         }
 
     def headword_of(self, identifier):
-        dictionary_number, headword_number, _ = identifier.split(":", 2)
-        return self.dictionaries[int(dictionary_number)].headword(
-            int(headword_number))
+        _, entries = self.entries_of(identifier)
+        dictionary, headword_number = entries[0]
+        return dictionary.headword(headword_number)
 
     def handle_method_call(self, connection, sender, object_path,
                            interface_name, method_name, parameters,
