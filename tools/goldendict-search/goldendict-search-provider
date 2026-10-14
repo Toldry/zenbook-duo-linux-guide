@@ -257,6 +257,8 @@ def first_existing(base, suffixes):
 
 
 LANGUAGE_PAIR = re.compile(r"[a-z]{2,3}-[a-z]{2,3}")
+# Results from these dictionaries show only the definition, no label.
+UNLABELED_DICTIONARIES = {"en-en"}
 
 
 def short_dictionary_name(book_name, file_name):
@@ -475,11 +477,12 @@ class SearchProvider:
         else:
             name = f"{typed_form} → {headword}"
         summary = dictionary.summary(int(headword_number))
+        if dictionary.name not in UNLABELED_DICTIONARIES:
+            summary = f"{dictionary.name} · {summary}"
         return {
             "id": GLib.Variant("s", identifier),
             "name": GLib.Variant("s", name),
-            "description": GLib.Variant(
-                "s", f"{dictionary.name} · {summary}"),
+            "description": GLib.Variant("s", summary),
             "gicon": GLib.Variant("s", self.icon),
         }
 

@@ -126,9 +126,8 @@ GoldenDict-ng comes with no dictionaries. Good free ones come from Wiktionary, a
 | `en-es` | English words | **Spanish**: translations and short definitions | 19,500 | Wiktionary StarDict, September 2026 |
 | `es-es` | Spanish words | **Spanish** | 123,000 | Wiktionary StarDict, September 2026 |
 | `he-en` | Hebrew words | English | 17,700 | Wiktionary StarDict, September 2026 |
-| `es-en` (optional) | Spanish words | English, so you also get translations | — | Wiktionary StarDict, September 2026 |
 
-The label, `<word language>-<explanation language>`, is what the overview shows next to each result. `en-es` and `es-es` come from the Spanish Wiktionary (*Wikcionario*), so `en-es` is the Spanish Wiktionary's entries for English words: much smaller than `en-en`, but in Spanish.
+The label, `<word language>-<explanation language>`, is what the overview shows before each definition, except for `en-en`, whose definitions are shown without a label. `en-es` and `es-es` come from the Spanish Wiktionary (*Wikcionario*), so `en-es` is the Spanish Wiktionary's entries for English words: much smaller than `en-en`, but in Spanish.
 
 **There is no free Hebrew-Hebrew dictionary to download.** The Hebrew Wiktionary (*ויקימילון*) exists, but wiktextract, the tool these dictionary files are built with, can't read it yet, and I found no other ready-made conversion. The well-known Hebrew dictionaries (Even-Shoshan, Rav-Milim) aren't free to copy. `he-en`, built from the English Wiktionary, is the best offline option. Its 17,700 entries cover common words well and rare ones thinly.
 
@@ -164,8 +163,6 @@ for name in en-es es-es he-en; do
     rm "$name.tar.zst"
 done
 ```
-
-For Spanish words explained in English as well (19 MB more), run the same loop with just `es-en` instead of `en-es es-es he-en`. In the overview this adds a second result for most Spanish words, so the 5 rows fill up faster.
 
 The Wiktionary StarDict project has files for many other language pairs, named `<word language>-<explanation language>`, such as `fr-fr` or `de-en`. See its release page: https://github.com/xxyzz/wiktionary_stardict/releases/latest
 
@@ -279,7 +276,7 @@ Settings → Search
 ## 5. Try it
 
 1. Press `Super` and type `hola`.
-2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *en-en · intj: (informal) Hello, hi, hey.* and *es-es · Interjección: Expresión de saludo utilizada entre dos o más personas…*. Often that's all you need.
+2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *intj: (informal) Hello, hi, hey.* (from `en-en`, so without a label) and *es-es · Interjección: Expresión de saludo utilizada entre dos o más personas…*. Often that's all you need.
 3. For the full entry, press `↓` until a row is highlighted and press `Enter`, or click it.
 
 GoldenDict-ng opens with the entries for *hola*. If it was already open, it shows the new word in the same window.
