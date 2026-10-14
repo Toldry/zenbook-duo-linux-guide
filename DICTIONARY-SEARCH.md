@@ -52,7 +52,7 @@ sequenceDiagram
     GNOME->>P: GetInitialResultSet(["hablo"])
     P->>D: Look up "hablo"
     D-->>P: inflected form of "hablar"
-    P-->>GNOME: "hablo → hablar", Español-Español · Verbo intransitivo: Expresar algo usando palabras…
+    P-->>GNOME: "hablo → hablar", es-es · Verbo intransitivo: Expresar algo usando palabras…
     You->>GNOME: ↓ to the row, Enter (or click it)
     GNOME->>P: ActivateResult
     P->>GD: goldendict -- hablar
@@ -64,11 +64,11 @@ What the overview shows for `Super`, `שלום`:
 ```
 GoldenDict-ng
   📖 שלום → שָׁלוֹם
-     Hebrew-English · Noun: (uncountable) peace · (uncountable, archaic) rest, quietude · …
+     he-en · Noun: (uncountable) peace · (uncountable, archaic) rest, quietude · …
   📖 שלום → שָׁלוֹם
-     Hebrew-English · Interjection: hello (conventional greeting) · (dated) goodbye
+     he-en · Interjection: hello (conventional greeting) · (dated) goodbye
   📖 שלום → שָׁלוֹם
-     Hebrew-English · Proper noun: A title of God. · a male given name, Shalom
+     he-en · Proper noun: A title of God. · a male given name, Shalom
 ```
 
 - **Up to 5 results**, the most GNOME shows per app. Exact matches come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`), then, for 3 letters or more, words that start with what you typed.
@@ -120,16 +120,19 @@ Open **GoldenDict-ng** once from the app grid, then close it. That creates its s
 
 GoldenDict-ng comes with no dictionaries. Good free ones come from Wiktionary, already converted to StarDict format (a format GoldenDict-ng reads):
 
-| Dictionary | Look up | Explained in | Entries | From |
+| Label | Look up | Explained in | Entries | From |
 |---|---|---|---|---|
-| English-English | English words | English | 462,000 | Wiktionary-Dictionaries, built November 2022 |
-| Español-Español | Spanish words | **Spanish** (from the Spanish Wiktionary, *Wikcionario*) | 123,000 | Wiktionary StarDict, September 2026 |
-| Hebrew-English | Hebrew words | English | 17,700 | Wiktionary StarDict, September 2026 |
-| Spanish-English (optional) | Spanish words | English, so you also get translations | — | Wiktionary StarDict, September 2026 |
+| `en-en` | English words | English | 462,000 | Wiktionary-Dictionaries, built November 2022 |
+| `en-es` | English words | **Spanish**: translations and short definitions | 19,500 | Wiktionary StarDict, September 2026 |
+| `es-es` | Spanish words | **Spanish** | 123,000 | Wiktionary StarDict, September 2026 |
+| `he-en` | Hebrew words | English | 17,700 | Wiktionary StarDict, September 2026 |
+| `es-en` (optional) | Spanish words | English, so you also get translations | — | Wiktionary StarDict, September 2026 |
 
-**There is no free Hebrew-Hebrew dictionary to download.** The Hebrew Wiktionary (*ויקימילון*) exists, but wiktextract, the tool these dictionary files are built with, can't read it yet, and I found no other ready-made conversion. The well-known Hebrew dictionaries (Even-Shoshan, Rav-Milim) aren't free to copy. Hebrew-English, built from the English Wiktionary, is the best offline option. Its 17,700 entries cover common words well and rare ones thinly.
+The label, `<word language>-<explanation language>`, is what the overview shows next to each result. `en-es` and `es-es` come from the Spanish Wiktionary (*Wikcionario*), so `en-es` is the Spanish Wiktionary's entries for English words: much smaller than `en-en`, but in Spanish.
 
-The English one comes from a different project because the Wiktionary StarDict project's English-English file is 130 MB to download, against 22 MB here.
+**There is no free Hebrew-Hebrew dictionary to download.** The Hebrew Wiktionary (*ויקימילון*) exists, but wiktextract, the tool these dictionary files are built with, can't read it yet, and I found no other ready-made conversion. The well-known Hebrew dictionaries (Even-Shoshan, Rav-Milim) aren't free to copy. `he-en`, built from the English Wiktionary, is the best offline option. Its 17,700 entries cover common words well and rare ones thinly.
+
+The English one comes from a different project because the Wiktionary StarDict project's `en-en` file is 130 MB to download, against 22 MB here.
 
 ### Step 1: Download them
 
@@ -141,20 +144,20 @@ The Wiktionary StarDict files are compressed with `zstd`, so install that first 
 sudo apt install zstd
 ```
 
-Then download the three dictionaries, about 50 MB (73 MB once unpacked):
+Then download the four dictionaries, about 52 MB (75 MB once unpacked):
 
 ```bash
 mkdir -p ~/.local/share/dictionaries
 cd ~/.local/share/dictionaries
 
-# English-English
+# en-en
 file="English-English Wiktionary dictionary stardict.tar.gz"
 wget -O "$file" "https://raw.githubusercontent.com/Vuizur/Wiktionary-Dictionaries/master/${file// /%20}"
 tar -xzf "$file"
 rm "$file"
 
-# Español-Español and Hebrew-English (each unpacks into its own folder)
-for name in es-es he-en; do
+# en-es, es-es and he-en (each unpacks into its own folder)
+for name in en-es es-es he-en; do
     wget -O "$name.tar.zst" "https://github.com/xxyzz/wiktionary_stardict/releases/latest/download/$name.tar.zst"
     mkdir -p "$name"
     tar --zstd -xf "$name.tar.zst" -C "$name"
@@ -162,7 +165,7 @@ for name in es-es he-en; do
 done
 ```
 
-For Spanish words explained in English as well (19 MB more), run the same loop with `es-en` instead of `es-es he-en`. In the overview this adds a second result for most Spanish words, so the 5 rows fill up faster.
+For Spanish words explained in English as well (19 MB more), run the same loop with just `es-en` instead of `en-es es-es he-en`. In the overview this adds a second result for most Spanish words, so the 5 rows fill up faster.
 
 The Wiktionary StarDict project has files for many other language pairs, named `<word language>-<explanation language>`, such as `fr-fr` or `de-en`. See its release page: https://github.com/xxyzz/wiktionary_stardict/releases/latest
 
@@ -200,7 +203,7 @@ sudo apt install dict-wn dict-moby-thesaurus
 5. If you did step 2, check whether `/usr/share/dictd` is in the list. GoldenDict-ng adds it by itself the first time it starts, but only if the folder exists then, and in this guide it didn't yet. If it's missing, click **Add…** again and choose `/usr/share/dictd`.
 6. Click **OK**. GoldenDict-ng indexes the dictionaries, which takes a few seconds the first time.
 
-Type `casa` into GoldenDict-ng's search box to check: the Español-Español entry (*Edificación destinada a vivienda*) should appear.
+Type `casa` into GoldenDict-ng's search box to check: the `es-es` entry (*Edificación destinada a vivienda*) should appear.
 
 ### Step 4: Turn off the online sources
 
@@ -276,7 +279,7 @@ Settings → Search
 ## 5. Try it
 
 1. Press `Super` and type `hola`.
-2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *English-English · intj: (informal) Hello, hi, hey.* and *Español-Español · Interjección: Expresión de saludo utilizada entre dos o más personas…*. Often that's all you need.
+2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *en-en · intj: (informal) Hello, hi, hey.* and *es-es · Interjección: Expresión de saludo utilizada entre dos o más personas…*. Often that's all you need.
 3. For the full entry, press `↓` until a row is highlighted and press `Enter`, or click it.
 
 GoldenDict-ng opens with the entries for *hola*. If it was already open, it shows the new word in the same window.
@@ -321,7 +324,7 @@ GNOME's overview asks every search provider for results over D-Bus, using the `o
 
 | File | Contents | How the provider uses it |
 |---|---|---|
-| `.ifo` | Name and format | Shows the name, for example *Español-Español* |
+| `.ifo` | Name and format | Gives the label, such as `es-es`: the file's name if it's a language pair, else a pair in the dictionary's name, else the whole name |
 | `.idx` | Every headword, sorted, with where its article is | Finds the word by binary search |
 | `.syn` | Other forms (`hablo`, `ran`) and which headword they belong to | Finds inflected forms |
 | `.dict.dz` | The articles, compressed in small independent chunks ("dictzip") | Unpacks only the chunk with the article |
@@ -411,7 +414,7 @@ rm -r ~/.local/share/dictionaries
 - GoldenDict-ng on Flathub: https://flathub.org/apps/io.github.xiaoyifang.goldendict_ng
 - Ubuntu 24.04's `goldendict-ng` package and its files: https://packages.ubuntu.com/noble/goldendict-ng
 - Wiktionary dictionaries in StarDict format (English): https://github.com/Vuizur/Wiktionary-Dictionaries
-- Wiktionary dictionaries in StarDict format (Español-Español, Hebrew-English and many more pairs): https://github.com/xxyzz/wiktionary_stardict and https://xxyzz.github.io/wiktionary_stardict/
+- Wiktionary dictionaries in StarDict format (`en-es`, `es-es`, `he-en` and many more pairs): https://github.com/xxyzz/wiktionary_stardict and https://xxyzz.github.io/wiktionary_stardict/
 - The tool both projects build on, and the Wiktionary editions it can read (no Hebrew one): https://github.com/tatuylonen/wiktextract
 - The Wiktionary data they're built from: https://kaikki.org/
 - The Hebrew Wiktionary: https://he.wiktionary.org/

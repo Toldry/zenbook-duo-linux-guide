@@ -209,7 +209,8 @@ class StarDictDictionary:
         for line in ifo_path.read_text(encoding="utf-8").splitlines()[1:]:
             key, _, value = line.partition("=")
             info[key.strip()] = value.strip()
-        self.name = short_dictionary_name(info.get("bookname", ifo_path.stem))
+        self.name = short_dictionary_name(
+            info.get("bookname", ifo_path.stem), ifo_path.stem)
         self.type_sequence = info.get("sametypesequence", "")
         offset_bytes = 8 if info.get("idxoffsetbits") == "64" else 4
         self.offset_format = ">QI" if offset_bytes == 8 else ">II"
@@ -255,13 +256,19 @@ def first_existing(base, suffixes):
     return None
 
 
-def short_dictionary_name(book_name):
-    """"Wikcionario Español-Español" -> "Español-Español",
-    "Spanish-English Wiktionary dictionary (es-en)" -> "Spanish-English"."""
-    name = re.sub(r"\s*\([^)]*\)\s*$", "", book_name)
-    name = re.sub(r"\b(Wiktionary|Wikcionario|dictionary)\b", "", name)
-    name = re.sub(r"\s+", " ", name).strip()
-    return name or book_name
+LANGUAGE_PAIR = re.compile(r"[a-z]{2,3}-[a-z]{2,3}")
+
+
+def short_dictionary_name(book_name, file_name):
+    """A short label such as "es-en": the file name if it's a language
+    pair ("es-en.ifo"), else a pair in the book name ("Spanish-English
+    Wiktionary dictionary (es-en)"), else the book name itself."""
+    if LANGUAGE_PAIR.fullmatch(file_name):
+        return file_name
+    pairs = LANGUAGE_PAIR.findall(book_name)
+    if pairs:
+        return pairs[-1]
+    return book_name
 
 
 class ArticleSummarizer(HTMLParser):
