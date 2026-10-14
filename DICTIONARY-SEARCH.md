@@ -1,10 +1,10 @@
 # Look up words from the Super search
 
-Press `Super`, type a word in English, Spanish or Hebrew, and press `↓` then `Enter`. GoldenDict-ng opens with the word's definitions, synonyms and translations. Everything works offline.
+Press `Super` and type a word in English, Spanish or Hebrew. The overview shows the word with the start of its definition, straight from your dictionaries. Choose a result to open the full entry, with synonyms and translations, in GoldenDict-ng. Everything works offline.
 
 > **Who this is for:** anyone running Ubuntu with GNOME (the default desktop) from [GUIDE.md](GUIDE.md) or [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md) who wants a quick offline dictionary.
 >
-> **Status:** written in October 2026 for Ubuntu 24.04 (GNOME 46). The parts it relies on are the same in GNOME 47 to 49, so it should also work on Ubuntu 24.10 to 26.04. The search provider was tested against simulated GNOME Shell calls on D-Bus. It has not yet been run on a real Duo, so please [report problems](https://github.com/Toldry/zenbook-duo-linux-guide/issues).
+> **Status:** written in October 2026 for Ubuntu 24.04 (GNOME 46). The parts it relies on are the same in GNOME 47 to 49, so it should also work on Ubuntu 24.10 to 26.04. The search provider was tested against simulated GNOME Shell calls on D-Bus, with the three Wiktionary dictionaries. It has not yet been run on a real Duo, so please [report problems](https://github.com/Toldry/zenbook-duo-linux-guide/issues).
 
 ---
 
@@ -35,7 +35,7 @@ Press `Super`, type a word in English, Spanish or Hebrew, and press `↓` then `
 
 An app only appears in that list if it ships a *search provider*: a small program GNOME asks for results on every keystroke. GoldenDict-ng doesn't ship one, so with settings alone, typing `hola` after `Super` only finds the GoldenDict-ng app itself, not the word.
 
-This guide adds the missing search provider: one Python script ([`tools/goldendict-search/`](tools/goldendict-search/)) and two small config files. It uses only what Ubuntu already has (Python and its GNOME bindings). No launcher such as Ulauncher or Albert is needed, and no GNOME extension. Once it's installed, GoldenDict-ng shows up under **Search Results** like any other app.
+This guide adds the missing search provider: one Python script that reads the dictionary files itself ([`tools/goldendict-search/`](tools/goldendict-search/)) and two small config files. It uses only what Ubuntu already has (Python and its GNOME bindings). No launcher such as Ulauncher or Albert is needed, and no GNOME extension. Once it's installed, GoldenDict-ng shows up under **Search Results** like any other app.
 
 ---
 
@@ -47,19 +47,33 @@ sequenceDiagram
     participant GNOME as GNOME overview
     participant P as Search provider
     participant GD as GoldenDict-ng
-    You->>GNOME: Super, then type "hola"
-    GNOME->>P: GetInitialResultSet(["hola"])
-    P-->>GNOME: one result: "hola"
-    GNOME-->>You: GoldenDict-ng row: "hola / Look up in GoldenDict-ng"
+    participant D as Dictionary files
+    participant GD as GoldenDict-ng
+    You->>GNOME: Super, then type "hablo"
+    GNOME->>P: GetInitialResultSet(["hablo"])
+    P->>D: Look up "hablo"
+    D-->>P: inflected form of "hablar"
+    P-->>GNOME: "hablo → hablar", Spanish-English · verb: to talk; to speak…
     You->>GNOME: ↓ to the row, Enter (or click it)
-    GNOME->>P: ActivateResult("hola")
-    P->>GD: goldendict -- hola
-    GD-->>You: Window with every dictionary's entry for "hola"
+    GNOME->>P: ActivateResult
+    P->>GD: goldendict -- hablar
+    GD-->>You: Window with every dictionary's entry for "hablar"
 ```
 
-- **One row per search.** The overview shows a **GoldenDict-ng** group with a single result: what you typed. Choosing it opens that word or phrase in GoldenDict-ng, which searches all your dictionaries at once.
+What the overview shows for `Super`, `שלום`:
+
+```
+GoldenDict-ng
+  📖 שלום
+     Hebrew-English · noun: (uncountable) peace · (uncountable) rest, quietude · …
+  📖 שלום עליכם
+     Hebrew-English · intj: (Judaism) A traditional greeting; shalom aleichem.
+```
+
+- **Up to 5 results**, the most GNOME shows per app. Exact matches come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`), then, for 3 letters or more, words that start with what you typed.
+- **The start of the definition** is shown under each word: part of speech, then the senses separated by `·`. GNOME cuts it off at the end of the line.
 - **Any language, any script.** Hebrew typed right to left works the same as English or Spanish. Switch keyboard layouts with `Super+Space` as usual.
-- **Definitions show in GoldenDict-ng, not in the overview.** The overview only has room for a title and one line, so the row is a shortcut, not the answer. See [Limitations](#limitations).
+- **Nothing when nothing matches.** A search for an app name that isn't a word shows no GoldenDict-ng group.
 
 ---
 
@@ -154,6 +168,17 @@ sudo apt install dict-wn dict-moby-thesaurus
 
 Type `casa` into GoldenDict-ng's search box to check: the Spanish-English entry should appear.
 
+### Step 4: Turn off the online sources
+
+On first start, GoldenDict-ng switches on three online sources: **English Wikipedia**, **English Wiktionary** and the **dict.org** server. They need the internet, and when they answer first, a lookup opens a Wikipedia article instead of your dictionaries. To keep everything offline:
+
+1. Open **Edit → Dictionaries** again (`F3`).
+2. On the **Sources → Wikipedia** tab, untick **Enabled** for every row.
+3. On the **Sources → DICT servers** tab, untick **Enabled** for **dict.org**.
+4. Click **OK**.
+
+Now a lookup only shows the dictionaries from steps 1 and 2.
+
 ---
 
 ## 3. Install the search provider
@@ -182,10 +207,11 @@ cd ~/zenbook-duo-linux-guide && git pull
 It asks for your password once. The installer:
 
 1. Checks that GoldenDict-ng and Python's GNOME bindings (`python3-gi`, part of Ubuntu Desktop) are installed.
-2. Copies the provider to `~/.local/bin/goldendict-search-provider`.
-3. Tells D-Bus how to start the provider when GNOME first needs it. D-Bus is the message bus desktop programs use to talk to each other.
-4. Registers the provider with GNOME in `/usr/local/share/gnome-shell/search-providers/`. GNOME only looks in system folders for these, which is why it needs your password.
-5. Makes GNOME reload its list of providers by switching **App Search** off and on again, so there is no need to log out.
+2. Stops an older copy of the provider if one is running, so running the installer again updates it.
+3. Copies the provider to `~/.local/bin/goldendict-search-provider`.
+4. Tells D-Bus how to start the provider when GNOME first needs it. D-Bus is the message bus desktop programs use to talk to each other.
+5. Registers the provider with GNOME in `/usr/local/share/gnome-shell/search-providers/`. GNOME only looks in system folders for these, which is why it needs your password.
+6. Makes GNOME reload its list of providers by switching **App Search** off and on again, so there is no need to log out.
 
 ---
 
@@ -216,22 +242,22 @@ Settings → Search
 ## 5. Try it
 
 1. Press `Super` and type `hola`.
-2. Under the app matches, a **GoldenDict-ng** group shows one row: **hola**, *Look up in GoldenDict-ng*.
-3. Press `↓` until that row is highlighted and press `Enter`, or click it.
+2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *English-English · intj: (informal) Hello, hi, hey.* and *Spanish-English · intj: hello, hi*. Often that's all you need.
+3. For the full entry, press `↓` until a row is highlighted and press `Enter`, or click it.
 
 GoldenDict-ng opens with the entries for *hola*. If it was already open, it shows the new word in the same window.
 
 Tips:
 
-- **`Enter` alone runs the first result.** That's the GoldenDict-ng row only when no app or setting matches what you typed. If `Enter` opened an app instead, use `↓` first.
-- **Phrases work.** Typing `dar a luz` looks up the whole phrase.
-- **Clicking the GoldenDict-ng icon** at the left of the group does the same as clicking the row.
+- **`Enter` alone runs the first result.** That's a GoldenDict-ng row only when no app or setting matches what you typed. If `Enter` opened an app instead, use `↓` first.
+- **Phrases work** if the dictionary has them: `dar a luz` finds *to give birth*.
+- **Clicking the GoldenDict-ng icon** at the left of the group looks up exactly what you typed, even if it isn't in the results.
 
 ---
 
 ## Optional: only search with a prefix
 
-By default the GoldenDict-ng row appears for every search, including when you're looking for an app or a file. If that's too much clutter, make it appear only when your query starts with a prefix, such as `d `:
+By default the GoldenDict-ng group appears for every search that matches a word, and most app names are words too (`files`, `calculator`). If that's too much clutter, make it appear only when your query starts with a prefix, such as `d `:
 
 1. Open `~/.local/bin/goldendict-search-provider` in a text editor.
 2. Change the line `QUERY_PREFIX = ""` to `QUERY_PREFIX = "d "`.
@@ -241,25 +267,38 @@ By default the GoldenDict-ng row appears for every search, including when you're
    pkill -f goldendict-search-provider
    ```
 
-Now `Super`, `d hola` looks up *hola*, and plain `hola` doesn't show the row. Running the installer again puts back the default, so redo the edit after updating.
+Now `Super`, `d hola` looks up *hola*, and plain `hola` doesn't show the group. Running the installer again puts back the default, so redo the edit after updating.
 
 ---
 
 ## How it works
 
-GNOME's overview asks every search provider for results over D-Bus, using the `org.gnome.Shell.SearchProvider2` interface. The provider is a short Python script that answers five questions:
+GNOME's overview asks every search provider for results over D-Bus, using the `org.gnome.Shell.SearchProvider2` interface. The provider is a Python script that answers five questions:
 
 | GNOME asks | The provider answers |
 |---|---|
-| `GetInitialResultSet` (you started typing) | One result: the query itself, or nothing if it's empty or lacks the prefix |
+| `GetInitialResultSet` (you started typing) | Up to 5 matching words, or nothing if none match or the query lacks the prefix |
 | `GetSubsearchResultSet` (you typed more) | The same, for the longer query |
-| `GetResultMetas` (what to show) | The query as the title, *Look up in GoldenDict-ng* below it, and GoldenDict-ng's icon |
-| `ActivateResult` (you chose the row) | Runs `goldendict -- <query>` (or `flatpak run … -- <query>`) |
-| `LaunchSearch` (you clicked the group's icon) | The same |
+| `GetResultMetas` (what to show) | Each word, the dictionary's name and the start of the definition, and GoldenDict-ng's icon |
+| `ActivateResult` (you chose a row) | Runs `goldendict -- <word>` (or `flatpak run … -- <word>`) |
+| `LaunchSearch` (you clicked the group's icon) | The same, with exactly what you typed |
 
-GoldenDict-ng only allows one copy of itself to run. When it's already open, a second `goldendict <word>` hands the word to the open window and exits. The `--` makes sure a query such as `-ing` is looked up, not read as an option.
+**Reading the dictionaries.** The provider reads StarDict dictionaries (`.ifo` files) in `~/.local/share/dictionaries` and `/usr/share/stardict/dic`, with their subfolders, using only Python's standard library. A StarDict dictionary is three or four files:
 
-The provider doesn't run all the time. D-Bus starts it the first time you type in the overview after logging in, and it quits after 5 minutes without a search.
+| File | Contents | How the provider uses it |
+|---|---|---|
+| `.ifo` | Name and format | Shows the name, for example *Spanish-English* |
+| `.idx` | Every headword, sorted, with where its article is | Finds the word by binary search |
+| `.syn` | Other forms (`hablo`, `ran`) and which headword they belong to | Finds inflected forms |
+| `.dict.dz` | The articles, compressed in small independent chunks ("dictzip") | Unpacks only the chunk with the article |
+
+At start it notes where each word begins in the `.idx` and `.syn` files, which takes about 0.25 seconds for the three Wiktionary dictionaries. After that, each search takes about 5 to 10 milliseconds. The files are memory-mapped rather than read in, so they cost little memory.
+
+The article is HTML. The provider turns it into one line: the part of speech, then the senses, separated by `·`, and further parts of speech after a `|`.
+
+**Opening GoldenDict-ng.** GoldenDict-ng only allows one copy of itself to run. When it's already open, a second `goldendict <word>` hands the word to the open window and exits. The `--` makes sure a word such as `-ing` is looked up, not read as an option. For an inflected form, the provider opens the headword (`hablar`, not `hablo`).
+
+The provider doesn't run all the time. D-Bus starts it the first time you type in the overview after logging in, and it quits after 10 minutes without a search. Dictionaries you add are picked up the next time it starts; to pick them up now, run `pkill -f goldendict-search-provider`.
 
 Files it uses:
 
@@ -274,8 +313,10 @@ Files it uses:
 
 ## Limitations
 
-- **No definitions in the overview.** The row only repeats your query. Showing a definition there would mean reading the dictionary files from the provider, which needs a separate dictionary tool such as `sdcv` and would only have one line of space anyway.
-- **No spelling suggestions.** The row offers exactly what you typed, even if no dictionary has it. GoldenDict-ng then suggests close matches in its word list.
+- **One line of definition.** The overview has room for a title and one line, so long entries are cut off. Open the word in GoldenDict-ng for the rest.
+- **StarDict only.** The overview only searches StarDict dictionaries in the two folders above. Dictionaries in other formats, such as WordNet's `dictd` files from step 2.2, still work in GoldenDict-ng but don't appear in the overview.
+- **Accents must match.** `arbol` doesn't find `árbol`. Only upper and lower case of the letters A to Z are ignored, as in StarDict itself. Hebrew works with or without vowel points (niqqud): the headwords are written without them, and the dictionary lists the pointed spellings as other forms.
+- **No spelling suggestions.** A misspelled word finds nothing in the overview. Click the GoldenDict-ng icon instead to look up exactly what you typed; GoldenDict-ng suggests close matches.
 - **The window may not come to the front.** If GoldenDict-ng is already open behind other windows, GNOME sometimes shows a *"GoldenDict-ng is ready"* notification instead of raising it. This is GNOME's protection against apps stealing focus. I'm not sure how often it happens with GoldenDict-ng; closing GoldenDict-ng after each lookup avoids it.
 - **The registration is for all users, the provider for one.** Other accounts on the laptop see GoldenDict-ng under **Search Results**, but it gives them no results until they run the installer too.
 - **The Wiktionary files are from 2022** and Hebrew coverage is thinner than English or Spanish.
@@ -288,9 +329,11 @@ Files it uses:
 |---|---|---|
 | The installer says *"GoldenDict-ng isn't installed"* | Step 1 skipped, or only the old `goldendict` package installed | `sudo apt install goldendict-ng` |
 | **GoldenDict-ng** isn't listed under **Search Results** | Settings was open during the install, or the `.ini` file is missing | Close and reopen Settings. Check with `ls /usr/local/share/gnome-shell/search-providers/` |
-| It's listed, but no GoldenDict-ng row appears in the overview | GNOME hasn't reloaded its providers | In **Settings → Search**, switch **App Search** off and on again. If that doesn't help, log out and back in |
-| Still no row | The provider fails to start | Run `~/.local/bin/goldendict-search-provider` in a terminal, search in the overview, and read the errors. Also check `journalctl --user -b \| grep -i goldendict` |
-| The row appears, but choosing it does nothing | GoldenDict-ng can't be started | Run `goldendict hola` in a terminal and read the error |
+| It's listed, but no GoldenDict-ng results appear in the overview | GNOME hasn't reloaded its providers | In **Settings → Search**, switch **App Search** off and on again. If that doesn't help, log out and back in |
+| Still no results | No dictionaries in `~/.local/share/dictionaries`, or the provider fails to start | Check with `ls ~/.local/share/dictionaries/*/*.ifo`. Then run `pkill -f goldendict-search-provider; ~/.local/bin/goldendict-search-provider` in a terminal, search in the overview, and read the errors. Also check `journalctl --user -b \| grep -i goldendict` |
+| Results show only *Look up in GoldenDict-ng*, no definitions | The older version of the provider is installed | Update and rerun the installer: `cd ~/zenbook-duo-linux-guide && git pull && tools/goldendict-search/install.sh` |
+| Choosing a result does nothing | GoldenDict-ng can't be started | Run `goldendict hola` in a terminal and read the error |
+| Choosing a result opens a Wikipedia article | GoldenDict-ng's online sources are on, and your dictionaries may not be loaded | Do [step 2.4](#step-4-turn-off-the-online-sources), then check [step 2.3](#step-3-point-goldendict-ng-at-them) |
 | GoldenDict-ng opens but finds nothing | No dictionaries loaded | Redo [step 2.3](#step-3-point-goldendict-ng-at-them); check that **Recursive** is ticked |
 | WordNet doesn't appear in GoldenDict-ng | Its `dictd` files weren't recognized | Remove `/usr/share/dictd` from the sources; the Wiktionary English dictionary covers synonyms too |
 
@@ -337,6 +380,9 @@ rm -r ~/.local/share/dictionaries
 - Flatpak's `xdg-data/…` folder permission: https://docs.flatpak.org/en/latest/sandbox-permissions.html
 - WordNet: https://wordnet.princeton.edu/ and the Ubuntu package https://packages.ubuntu.com/noble/dict-wn
 - Writing a GNOME search provider: https://developer.gnome.org/documentation/tutorials/search-provider.html
+- GoldenDict-ng's default online sources (Wikipedia, Wiktionary, dict.org): https://github.com/xiaoyifang/goldendict-ng/blob/staged/src/config.cc
+- The StarDict file formats (`.ifo`, `.idx`, `.syn`, `.dict`): https://github.com/huzheng001/stardict-3/blob/master/dict/doc/StarDictFileFormat
+- The dictzip format: https://manpages.ubuntu.com/manpages/noble/man1/dictzip.1.html
 - How GNOME Shell finds search providers (system data folders only, `DesktopId`, `Version`): https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/gnome-46/js/ui/remoteSearch.js
 - GNOME Shell reloading providers when the search settings change: https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/gnome-46/js/ui/search.js
 - The **App Search** and **Search Results** settings: https://gitlab.gnome.org/GNOME/gnome-control-center/-/blob/gnome-46/panels/search/cc-search-panel.ui

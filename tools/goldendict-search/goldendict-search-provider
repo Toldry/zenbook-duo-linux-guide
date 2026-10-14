@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""Show a "Look up <word>" result in the GNOME overview search.
+"""Show dictionary definitions in the GNOME overview search.
 
-Choosing the result opens the word in GoldenDict-ng. GNOME Shell starts
-this script over D-Bus the first time you search, and the script exits
-again after a few idle minutes.
+The script reads the StarDict dictionaries in DICTIONARY_FOLDERS itself
+and shows each match with the start of its definition. Choosing a match
+opens the full entry in GoldenDict-ng. GNOME Shell starts this script over
+D-Bus the first time you search, and the script exits again after a few
+idle minutes.
 """
 
+import gzip
+import html
+import mmap
+import re
 import shutil
+import struct
 import subprocess
+import zlib
+from array import array
+from pathlib import Path
 
 from gi.repository import Gio, GLib
 
@@ -16,11 +26,23 @@ OBJECT_PATH = "/io/github/toldry/GoldenDictSearch"
 GOLDENDICT_DESKTOP_ID = "io.github.xiaoyifang.goldendict_ng.desktop"
 GOLDENDICT_FLATPAK_ID = "io.github.xiaoyifang.goldendict_ng"
 
-# Only offer a lookup when the query starts with this text, e.g. "d ".
-# Leave it empty to offer a lookup for every search.
+# Folders searched, with their subfolders, for StarDict dictionaries
+# (.ifo files). GoldenDict-ng may use more; this script only needs these.
+DICTIONARY_FOLDERS = [
+    Path.home() / ".local/share/dictionaries",
+    Path("/usr/share/stardict/dic"),
+]
+
+# Only search when the query starts with this text, e.g. "d ".
+# Leave it empty to search on every query.
 QUERY_PREFIX = ""
 
-IDLE_EXIT_SECONDS = 300
+# GNOME shows at most 5 results per app.
+MAX_RESULTS = 5
+# Words shorter than this only get exact matches, not "starts with" ones.
+MIN_PREFIX_SEARCH_LENGTH = 3
+MAX_DESCRIPTION_LENGTH = 200
+IDLE_EXIT_SECONDS = 600
 
 INTERFACE_XML = """
 <node>
@@ -50,6 +72,221 @@ INTERFACE_XML = """
   </interface>
 </node>
 """
+
+
+class DictZipFile:
+    """Random access to a .dict.dz file without unpacking all of it.
+
+    dictzip is gzip with a table of independently compressed chunks in
+    the header's "RA" extra field.
+    """
+
+    def __init__(self, path):
+        self.file = open(path, "rb")
+        header = self.file.read(10)
+        flags = header[3]
+        if header[:2] != b"\x1f\x8b" or not flags & 0x04:
+            raise ValueError(f"{path} is not a dictzip file")
+        (extra_length,) = struct.unpack("<H", self.file.read(2))
+        extra = self.file.read(extra_length)
+        chunk_sizes = None
+        position = 0
+        while position + 4 <= len(extra):
+            field_id = extra[position:position + 2]
+            (field_length,) = struct.unpack(
+                "<H", extra[position + 2:position + 4])
+            field = extra[position + 4:position + 4 + field_length]
+            if field_id == b"RA":
+                _, self.chunk_length, chunk_count = struct.unpack(
+                    "<HHH", field[:6])
+                chunk_sizes = struct.unpack(
+                    f"<{chunk_count}H", field[6:6 + 2 * chunk_count])
+            position += 4 + field_length
+        if chunk_sizes is None:
+            raise ValueError(f"{path} has no dictzip chunk table")
+        if flags & 0x08:  # File name, zero-terminated.
+            self._skip_zero_terminated()
+        if flags & 0x10:  # Comment, zero-terminated.
+            self._skip_zero_terminated()
+        if flags & 0x02:  # Header checksum.
+            self.file.read(2)
+        self.chunk_offsets = [self.file.tell()]
+        for chunk_size in chunk_sizes:
+            self.chunk_offsets.append(self.chunk_offsets[-1] + chunk_size)
+
+    def _skip_zero_terminated(self):
+        while self.file.read(1) not in (b"\0", b""):
+            pass
+
+    def read(self, offset, size):
+        first_chunk = offset // self.chunk_length
+        last_chunk = (offset + size - 1) // self.chunk_length
+        data = bytearray()
+        for chunk in range(first_chunk, last_chunk + 1):
+            start = self.chunk_offsets[chunk]
+            self.file.seek(start)
+            compressed = self.file.read(self.chunk_offsets[chunk + 1] - start)
+            data += zlib.decompressobj(-zlib.MAX_WBITS).decompress(compressed)
+        skip = offset - first_chunk * self.chunk_length
+        return bytes(data[skip:skip + size])
+
+
+class PlainDictFile:
+    def __init__(self, path):
+        self.file = open(path, "rb")
+
+    def read(self, offset, size):
+        self.file.seek(offset)
+        return self.file.read(size)
+
+
+class SortedWordList:
+    """A StarDict .idx or .syn file: zero-terminated words, each followed
+    by fixed-size data, sorted case-insensitively for ASCII letters."""
+
+    def __init__(self, data, data_size):
+        self.data = data
+        self.data_size = data_size
+        self.starts = array("L")
+        position = 0
+        find = data.find
+        while position < len(data):
+            self.starts.append(position)
+            position = find(b"\0", position) + 1 + data_size
+
+    def __len__(self):
+        return len(self.starts)
+
+    def word(self, number):
+        start = self.starts[number]
+        return self.data[start:self.data.find(b"\0", start)]
+
+    def entry_data(self, number):
+        end = self.data.find(b"\0", self.starts[number]) + 1
+        return self.data[end:end + self.data_size]
+
+    def first_at_or_after(self, folded_word):
+        """Number of the first word >= folded_word, comparing like StarDict
+        does: ASCII letters without case."""
+        low, high = 0, len(self.starts)
+        while low < high:
+            middle = (low + high) // 2
+            if self.word(middle).lower() < folded_word:
+                low = middle + 1
+            else:
+                high = middle
+        return low
+
+    def matches(self, word, whole_word=True, limit=MAX_RESULTS):
+        folded_word = word.encode().lower()
+        number = self.first_at_or_after(folded_word)
+        found = []
+        while number < len(self.starts) and len(found) < limit:
+            candidate = self.word(number).lower()
+            if whole_word and candidate != folded_word:
+                break
+            if not whole_word and not candidate.startswith(folded_word):
+                break
+            found.append(number)
+            number += 1
+        return found
+
+
+def open_word_list_data(path):
+    if path.suffix == ".gz":
+        with gzip.open(path) as compressed:
+            return compressed.read()
+    with open(path, "rb") as file:
+        if file.seek(0, 2) == 0:
+            return b""
+        return mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+
+
+class StarDictDictionary:
+    def __init__(self, ifo_path):
+        info = {}
+        for line in ifo_path.read_text(encoding="utf-8").splitlines()[1:]:
+            key, _, value = line.partition("=")
+            info[key.strip()] = value.strip()
+        self.name = short_dictionary_name(info.get("bookname", ifo_path.stem))
+        self.type_sequence = info.get("sametypesequence", "")
+        offset_bytes = 8 if info.get("idxoffsetbits") == "64" else 4
+        self.offset_format = ">QI" if offset_bytes == 8 else ">II"
+
+        base = ifo_path.with_suffix("")
+        index_path = first_existing(base, [".idx", ".idx.gz"])
+        dict_path = first_existing(base, [".dict.dz", ".dict"])
+        if index_path is None or dict_path is None:
+            raise FileNotFoundError(f"{ifo_path}: missing .idx or .dict")
+        self.index = SortedWordList(
+            open_word_list_data(index_path), offset_bytes + 4)
+        synonym_path = first_existing(base, [".syn"])
+        self.synonyms = (
+            SortedWordList(open_word_list_data(synonym_path), 4)
+            if synonym_path else None)
+        self.articles = (
+            DictZipFile(dict_path) if dict_path.suffix == ".dz"
+            else PlainDictFile(dict_path))
+
+    def headword(self, number):
+        return self.index.word(number).decode("utf-8", "replace")
+
+    def synonym_target(self, synonym_number):
+        (number,) = struct.unpack(
+            ">I", self.synonyms.entry_data(synonym_number))
+        return number
+
+    def summary(self, number):
+        offset, size = struct.unpack(
+            self.offset_format, self.index.entry_data(number))
+        article = self.articles.read(offset, size)
+        if not self.type_sequence:
+            # Each field starts with its type letter; keep the first field.
+            article = article[1:].split(b"\0", 1)[0]
+        return article_to_summary(article.decode("utf-8", "replace"))
+
+
+def first_existing(base, suffixes):
+    for suffix in suffixes:
+        path = base.with_name(base.name + suffix)
+        if path.exists():
+            return path
+    return None
+
+
+def short_dictionary_name(book_name):
+    """"Spanish-English Wiktionary dictionary (es-en)" -> "Spanish-English"."""
+    name = re.sub(r"\s*\([^)]*\)\s*$", "", book_name)
+    name = re.sub(r"\s+Wiktionary dictionary$", "", name)
+    return name or book_name
+
+
+def article_to_summary(article):
+    """Turn an HTML or plain-text article into one short line, e.g.
+    "noun: peace · rest | intj: hello · goodbye"."""
+    # Wiktionary articles start each part of speech with "<i>noun</i><br>".
+    text = re.sub(r"<i>([^<]*)</i>\s*(<br\s*/?>)?", r" | \1: ", article)
+    text = re.sub(r"<li[^>]*>", " · ", text)
+    text = re.sub(r"<br\s*/?>|</p>|</div>", " ", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r":\s*·\s*", ": ", text)
+    text = re.sub(r"^\|\s*", "", text)
+    if len(text) > MAX_DESCRIPTION_LENGTH:
+        text = text[:MAX_DESCRIPTION_LENGTH].rsplit(" ", 1)[0] + "…"
+    return text
+
+
+def load_dictionaries():
+    dictionaries = []
+    for folder in DICTIONARY_FOLDERS:
+        for ifo_path in sorted(folder.rglob("*.ifo")):
+            try:
+                dictionaries.append(StarDictDictionary(ifo_path))
+            except (OSError, ValueError, struct.error) as error:
+                print(f"Skipping {ifo_path}: {error}", flush=True)
+    return dictionaries
 
 
 def query_from_terms(terms):
@@ -85,9 +322,13 @@ def goldendict_icon():
 
 
 class SearchProvider:
+    """Result identifiers look like "2:1534:hablo": dictionary number,
+    headword number, and the form you typed (shown when it differs)."""
+
     def __init__(self, main_loop):
         self.main_loop = main_loop
         self.icon = goldendict_icon()
+        self.dictionaries = load_dictionaries()
         self.idle_timer_id = 0
         self.restart_idle_timer()
 
@@ -97,6 +338,65 @@ class SearchProvider:
         self.idle_timer_id = GLib.timeout_add_seconds(
             IDLE_EXIT_SECONDS, self.main_loop.quit)
 
+    def search(self, terms):
+        query = query_from_terms(terms)
+        if not query:
+            return []
+        results = []
+        seen = set()
+
+        def add(dictionary_number, headword_number, typed_form):
+            if (dictionary_number, headword_number) in seen:
+                return
+            seen.add((dictionary_number, headword_number))
+            results.append(
+                f"{dictionary_number}:{headword_number}:{typed_form}")
+
+        # Exact headwords first, then inflected forms ("hablo" -> "hablar"),
+        # then, for longer queries, headwords that start with the query.
+        for number, dictionary in enumerate(self.dictionaries):
+            for headword_number in dictionary.index.matches(query):
+                add(number, headword_number, dictionary.headword(
+                    headword_number))
+        for number, dictionary in enumerate(self.dictionaries):
+            if dictionary.synonyms is None:
+                continue
+            for synonym_number in dictionary.synonyms.matches(query):
+                typed_form = dictionary.synonyms.word(synonym_number).decode(
+                    "utf-8", "replace")
+                add(number, dictionary.synonym_target(synonym_number),
+                    typed_form)
+        if len(query) >= MIN_PREFIX_SEARCH_LENGTH:
+            for number, dictionary in enumerate(self.dictionaries):
+                for headword_number in dictionary.index.matches(
+                        query, whole_word=False):
+                    add(number, headword_number,
+                        dictionary.headword(headword_number))
+        return results[:MAX_RESULTS]
+
+    def result_meta(self, identifier):
+        dictionary_number, headword_number, typed_form = identifier.split(
+            ":", 2)
+        dictionary = self.dictionaries[int(dictionary_number)]
+        headword = dictionary.headword(int(headword_number))
+        if typed_form.lower() == headword.lower():
+            name = headword
+        else:
+            name = f"{typed_form} → {headword}"
+        summary = dictionary.summary(int(headword_number))
+        return {
+            "id": GLib.Variant("s", identifier),
+            "name": GLib.Variant("s", name),
+            "description": GLib.Variant(
+                "s", f"{dictionary.name} · {summary}"),
+            "gicon": GLib.Variant("s", self.icon),
+        }
+
+    def headword_of(self, identifier):
+        dictionary_number, headword_number, _ = identifier.split(":", 2)
+        return self.dictionaries[int(dictionary_number)].headword(
+            int(headword_number))
+
     def handle_method_call(self, connection, sender, object_path,
                            interface_name, method_name, parameters,
                            invocation):
@@ -104,25 +404,15 @@ class SearchProvider:
         arguments = parameters.unpack()
 
         if method_name == "GetInitialResultSet":
-            query = query_from_terms(arguments[0])
-            reply = GLib.Variant("(as)", ([query] if query else [],))
+            reply = GLib.Variant("(as)", (self.search(arguments[0]),))
         elif method_name == "GetSubsearchResultSet":
-            query = query_from_terms(arguments[1])
-            reply = GLib.Variant("(as)", ([query] if query else [],))
+            reply = GLib.Variant("(as)", (self.search(arguments[1]),))
         elif method_name == "GetResultMetas":
-            metas = [
-                {
-                    "id": GLib.Variant("s", word),
-                    "name": GLib.Variant("s", word),
-                    "description": GLib.Variant(
-                        "s", "Look up in GoldenDict-ng"),
-                    "gicon": GLib.Variant("s", self.icon),
-                }
-                for word in arguments[0]
-            ]
+            metas = [self.result_meta(identifier)
+                     for identifier in arguments[0]]
             reply = GLib.Variant("(aa{sv})", (metas,))
         elif method_name == "ActivateResult":
-            look_up(arguments[0])
+            look_up(self.headword_of(arguments[0]))
             reply = None
         elif method_name == "LaunchSearch":
             look_up(query_from_terms(arguments[0]))
