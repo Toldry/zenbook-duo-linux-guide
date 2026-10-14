@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Show a "Look up <word>" result in the GNOME overview search.
+
+Choosing the result opens the word in GoldenDict-ng. GNOME Shell starts
+this script over D-Bus the first time you search, and the script exits
+again after a few idle minutes.
+"""
+
+import shutil
+import subprocess
+
+from gi.repository import Gio, GLib
+
+BUS_NAME = "io.github.toldry.GoldenDictSearch"
+OBJECT_PATH = "/io/github/toldry/GoldenDictSearch"
+GOLDENDICT_DESKTOP_ID = "io.github.xiaoyifang.goldendict_ng.desktop"
+GOLDENDICT_FLATPAK_ID = "io.github.xiaoyifang.goldendict_ng"
+
+# Only offer a lookup when the query starts with this text, e.g. "d ".
+# Leave it empty to offer a lookup for every search.
+QUERY_PREFIX = ""
+
+IDLE_EXIT_SECONDS = 300
+
+INTERFACE_XML = """
+<node>
+  <interface name="org.gnome.Shell.SearchProvider2">
+    <method name="GetInitialResultSet">
+      <arg type="as" name="terms" direction="in"/>
+      <arg type="as" name="results" direction="out"/>
+    </method>
+    <method name="GetSubsearchResultSet">
+      <arg type="as" name="previous_results" direction="in"/>
+      <arg type="as" name="terms" direction="in"/>
+      <arg type="as" name="results" direction="out"/>
+    </method>
+    <method name="GetResultMetas">
+      <arg type="as" name="identifiers" direction="in"/>
+      <arg type="aa{sv}" name="metas" direction="out"/>
+    </method>
+    <method name="ActivateResult">
+      <arg type="s" name="identifier" direction="in"/>
+      <arg type="as" name="terms" direction="in"/>
+      <arg type="u" name="timestamp" direction="in"/>
+    </method>
+    <method name="LaunchSearch">
+      <arg type="as" name="terms" direction="in"/>
+      <arg type="u" name="timestamp" direction="in"/>
+    </method>
+  </interface>
+</node>
+"""
+
+
+def query_from_terms(terms):
+    """Join GNOME's whitespace-split terms; return "" if nothing to look up."""
+    query = " ".join(terms).strip()
+    if not query.startswith(QUERY_PREFIX):
+        return ""
+    return query[len(QUERY_PREFIX):].strip()
+
+
+def goldendict_command():
+    if shutil.which("goldendict"):
+        return ["goldendict"]
+    return ["flatpak", "run", GOLDENDICT_FLATPAK_ID]
+
+
+def look_up(word):
+    # "--" stops a word such as "-ing" from being read as an option.
+    command = goldendict_command()
+    if word:
+        command += ["--", word]
+    subprocess.Popen(command, start_new_session=True)
+
+
+def goldendict_icon():
+    try:
+        app_info = Gio.DesktopAppInfo.new(GOLDENDICT_DESKTOP_ID)
+    except TypeError:
+        app_info = None
+    if app_info and app_info.get_icon():
+        return app_info.get_icon().to_string()
+    return "accessories-dictionary"
+
+
+class SearchProvider:
+    def __init__(self, main_loop):
+        self.main_loop = main_loop
+        self.icon = goldendict_icon()
+        self.idle_timer_id = 0
+        self.restart_idle_timer()
+
+    def restart_idle_timer(self):
+        if self.idle_timer_id:
+            GLib.source_remove(self.idle_timer_id)
+        self.idle_timer_id = GLib.timeout_add_seconds(
+            IDLE_EXIT_SECONDS, self.main_loop.quit)
+
+    def handle_method_call(self, connection, sender, object_path,
+                           interface_name, method_name, parameters,
+                           invocation):
+        self.restart_idle_timer()
+        arguments = parameters.unpack()
+
+        if method_name == "GetInitialResultSet":
+            query = query_from_terms(arguments[0])
+            reply = GLib.Variant("(as)", ([query] if query else [],))
+        elif method_name == "GetSubsearchResultSet":
+            query = query_from_terms(arguments[1])
+            reply = GLib.Variant("(as)", ([query] if query else [],))
+        elif method_name == "GetResultMetas":
+            metas = [
+                {
+                    "id": GLib.Variant("s", word),
+                    "name": GLib.Variant("s", word),
+                    "description": GLib.Variant(
+                        "s", "Look up in GoldenDict-ng"),
+                    "gicon": GLib.Variant("s", self.icon),
+                }
+                for word in arguments[0]
+            ]
+            reply = GLib.Variant("(aa{sv})", (metas,))
+        elif method_name == "ActivateResult":
+            look_up(arguments[0])
+            reply = None
+        elif method_name == "LaunchSearch":
+            look_up(query_from_terms(arguments[0]))
+            reply = None
+        else:
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.UnknownMethod", method_name)
+            return
+        invocation.return_value(reply)
+
+
+def main():
+    main_loop = GLib.MainLoop()
+    provider = SearchProvider(main_loop)
+    interface_info = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML).interfaces[0]
+
+    def on_bus_acquired(connection, name):
+        connection.register_object(
+            OBJECT_PATH, interface_info, provider.handle_method_call,
+            None, None)
+
+    Gio.bus_own_name(
+        Gio.BusType.SESSION, BUS_NAME, Gio.BusNameOwnerFlags.NONE,
+        on_bus_acquired, None, lambda connection, name: main_loop.quit())
+    main_loop.run()
+
+
+if __name__ == "__main__":
+    main()

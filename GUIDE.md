@@ -55,6 +55,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [A different wallpaper on each screen](#a-different-wallpaper-on-each-screen)
    - [An ISO date and 24-hour clock in the top bar](#an-iso-date-and-24-hour-clock-in-the-top-bar)
    - [Mute the sound while the screen is locked](#mute-the-sound-while-the-screen-is-locked)
+   - [Look up words from the Super search](#look-up-words-from-the-super-search)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -699,6 +700,10 @@ GNOME's clock settings can't show the date as `2026-10-12`. [PANEL-CLOCK.md](PAN
 ### Mute the sound while the screen is locked
 
 GNOME has no setting to go quiet when you lock the screen. [MUTE-ON-LOCK.md](MUTE-ON-LOCK.md) installs a small background program that mutes the sound when you press `Super+L` (or the laptop locks itself) and unmutes it when you unlock, unless you had muted it yourself before.
+
+### Look up words from the Super search
+
+[DICTIONARY-SEARCH.md](DICTIONARY-SEARCH.md) sets up GoldenDict-ng, an offline dictionary app, with English, Spanish and Hebrew dictionaries from Wiktionary. It then adds GoldenDict-ng to **Settings → Search**, so you can press `Super`, type a word, and open its definitions, synonyms and translations.
 
 ---
 
