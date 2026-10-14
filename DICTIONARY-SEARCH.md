@@ -71,7 +71,7 @@ GoldenDict-ng
      he-en · Proper noun: A title of God. · a male given name, Shalom
 ```
 
-- **Up to 5 results**, the most GNOME shows per app. Exact matches come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`), then, for 3 letters or more, words that start with what you typed.
+- **Up to 5 results**, the most GNOME shows per app. Only whole words match, not words that merely start with what you typed: exact headwords come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`).
 - **The start of the definition** is shown under each word: part of speech, then the senses separated by `·`. GNOME cuts it off at the end of the line.
 - **Any language, any script.** Hebrew typed right to left works the same as English or Spanish. Switch keyboard layouts with `Super+Space` as usual.
 - **Nothing when nothing matches.** A search for an app name that isn't a word shows no GoldenDict-ng group.

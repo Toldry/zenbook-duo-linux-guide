@@ -40,8 +40,6 @@ QUERY_PREFIX = ""
 
 # GNOME shows at most 5 results per app.
 MAX_RESULTS = 5
-# Words shorter than this only get exact matches, not "starts with" ones.
-MIN_PREFIX_SEARCH_LENGTH = 3
 MAX_DESCRIPTION_LENGTH = 200
 IDLE_EXIT_SECONDS = 600
 
@@ -178,16 +176,14 @@ class SortedWordList:
                 high = middle
         return low
 
-    def matches(self, word, whole_word=True, limit=MAX_RESULTS):
+    def matches(self, word, limit=MAX_RESULTS):
+        """Numbers of the entries that are exactly word, ignoring the case
+        of ASCII letters."""
         folded_word = word.encode().lower()
         number = self.first_at_or_after(folded_word)
         found = []
-        while number < len(self.starts) and len(found) < limit:
-            candidate = self.word(number).lower()
-            if whole_word and candidate != folded_word:
-                break
-            if not whole_word and not candidate.startswith(folded_word):
-                break
+        while (number < len(self.starts) and len(found) < limit
+               and self.word(number).lower() == folded_word):
             found.append(number)
             number += 1
         return found
@@ -445,8 +441,8 @@ class SearchProvider:
             results.append(
                 f"{dictionary_number}:{headword_number}:{typed_form}")
 
-        # Exact headwords first, then inflected forms ("hablo" -> "hablar"),
-        # then, for longer queries, headwords that start with the query.
+        # Whole-word matches only: headwords first, then inflected forms
+        # ("hablo" -> "hablar").
         for number, dictionary in enumerate(self.dictionaries):
             for headword_number in dictionary.index.matches(query):
                 add(number, headword_number, dictionary.headword(
@@ -459,12 +455,6 @@ class SearchProvider:
                     "utf-8", "replace")
                 add(number, dictionary.synonym_target(synonym_number),
                     typed_form)
-        if len(query) >= MIN_PREFIX_SEARCH_LENGTH:
-            for number, dictionary in enumerate(self.dictionaries):
-                for headword_number in dictionary.index.matches(
-                        query, whole_word=False):
-                    add(number, headword_number,
-                        dictionary.headword(headword_number))
         return results[:MAX_RESULTS]
 
     def result_meta(self, identifier):
