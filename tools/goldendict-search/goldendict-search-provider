@@ -17,6 +17,7 @@ import struct
 import subprocess
 import zlib
 from array import array
+from html.parser import HTMLParser
 from pathlib import Path
 
 from gi.repository import Gio, GLib
@@ -255,24 +256,107 @@ def first_existing(base, suffixes):
 
 
 def short_dictionary_name(book_name):
-    """"Spanish-English Wiktionary dictionary (es-en)" -> "Spanish-English"."""
+    """"Wikcionario Español-Español" -> "Español-Español",
+    "Spanish-English Wiktionary dictionary (es-en)" -> "Spanish-English"."""
     name = re.sub(r"\s*\([^)]*\)\s*$", "", book_name)
-    name = re.sub(r"\s+Wiktionary dictionary$", "", name)
+    name = re.sub(r"\b(Wiktionary|Wikcionario|dictionary)\b", "", name)
+    name = re.sub(r"\s+", " ", name).strip()
     return name or book_name
+
+
+class ArticleSummarizer(HTMLParser):
+    """Collect the parts of speech and the senses of a Wiktionary article.
+
+    Handles two layouts:
+      <i>noun</i><br><ol><li>house</li></ol>
+      <h4>Noun</h4><p>headword line</p><ol><li>sense<dl>example</dl></li>
+      </ol>  (or <dl><dt>1</dt><dd>sense<ul>synonyms</ul></dd></dl>)
+    Pronunciation lists, headword lines, tables, notes and examples are
+    left out.
+    """
+
+    SKIPPED_TAGS = {"style", "script", "table", "p", "sup", "dt", "figure"}
+    HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+    LIST_TAGS = {"ul", "ol", "dl"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.sections = []  # [part of speech, [senses]]
+        self.skipped_tag = None
+        self.skipped_depth = 0
+        self.part_of_speech_tag = None
+        self.sense_tag = None
+        self.text = []
+
+    def handle_starttag(self, tag, attributes):
+        if self.skipped_tag:
+            if tag == self.skipped_tag:
+                self.skipped_depth += 1
+            return
+        if self.sense_tag:
+            # Examples, quotations and synonyms nested inside a sense.
+            if tag in self.LIST_TAGS or tag in self.SKIPPED_TAGS:
+                self._skip(tag)
+            return
+        if tag in self.SKIPPED_TAGS or tag == "ul":
+            self._skip(tag)
+        elif tag in self.HEADING_TAGS or tag == "i":
+            self.part_of_speech_tag = tag
+            self.text = []
+        elif tag in ("li", "dd"):
+            self.sense_tag = tag
+            self.text = []
+
+    def handle_endtag(self, tag):
+        if self.skipped_tag:
+            if tag == self.skipped_tag:
+                self.skipped_depth -= 1
+                if self.skipped_depth == 0:
+                    self.skipped_tag = None
+            return
+        if tag == self.part_of_speech_tag:
+            self.part_of_speech_tag = None
+            part_of_speech = collapse_spaces("".join(self.text))
+            if part_of_speech:
+                self.sections.append([part_of_speech, []])
+        elif tag == self.sense_tag:
+            self.sense_tag = None
+            sense = collapse_spaces("".join(self.text))
+            if sense:
+                if not self.sections:
+                    self.sections.append(["", []])
+                self.sections[-1][1].append(sense)
+
+    def handle_data(self, data):
+        if not self.skipped_tag and (self.part_of_speech_tag
+                                     or self.sense_tag):
+            self.text.append(data)
+
+    def _skip(self, tag):
+        self.skipped_tag = tag
+        self.skipped_depth = 1
+
+
+def collapse_spaces(text):
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def article_to_summary(article):
     """Turn an HTML or plain-text article into one short line, e.g.
     "noun: peace · rest | intj: hello · goodbye"."""
-    # Wiktionary articles start each part of speech with "<i>noun</i><br>".
-    text = re.sub(r"<i>([^<]*)</i>\s*(<br\s*/?>)?", r" | \1: ", article)
-    text = re.sub(r"<li[^>]*>", " · ", text)
-    text = re.sub(r"<br\s*/?>|</p>|</div>", " ", text)
-    text = re.sub(r"<[^>]+>", "", text)
-    text = html.unescape(text)
-    text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r":\s*·\s*", ": ", text)
-    text = re.sub(r"^\|\s*", "", text)
+    summarizer = ArticleSummarizer()
+    summarizer.feed(article)
+    summarizer.close()
+    sections = [(part_of_speech, senses)
+                for part_of_speech, senses in summarizer.sections if senses]
+    if sections:
+        text = " | ".join(
+            f"{part_of_speech}: {' · '.join(senses)}" if part_of_speech
+            else " · ".join(senses)
+            for part_of_speech, senses in sections)
+    else:
+        # Plain text, or a layout the summarizer doesn't know.
+        text = collapse_spaces(html.unescape(re.sub(r"<[^>]+>", " ", article)))
     if len(text) > MAX_DESCRIPTION_LENGTH:
         text = text[:MAX_DESCRIPTION_LENGTH].rsplit(" ", 1)[0] + "…"
     return text

@@ -46,14 +46,13 @@ sequenceDiagram
     participant You
     participant GNOME as GNOME overview
     participant P as Search provider
-    participant GD as GoldenDict-ng
     participant D as Dictionary files
     participant GD as GoldenDict-ng
     You->>GNOME: Super, then type "hablo"
     GNOME->>P: GetInitialResultSet(["hablo"])
     P->>D: Look up "hablo"
     D-->>P: inflected form of "hablar"
-    P-->>GNOME: "hablo → hablar", Spanish-English · verb: to talk; to speak…
+    P-->>GNOME: "hablo → hablar", Español-Español · Verbo intransitivo: Expresar algo usando palabras…
     You->>GNOME: ↓ to the row, Enter (or click it)
     GNOME->>P: ActivateResult
     P->>GD: goldendict -- hablar
@@ -64,10 +63,12 @@ What the overview shows for `Super`, `שלום`:
 
 ```
 GoldenDict-ng
-  📖 שלום
-     Hebrew-English · noun: (uncountable) peace · (uncountable) rest, quietude · …
-  📖 שלום עליכם
-     Hebrew-English · intj: (Judaism) A traditional greeting; shalom aleichem.
+  📖 שלום → שָׁלוֹם
+     Hebrew-English · Noun: (uncountable) peace · (uncountable, archaic) rest, quietude · …
+  📖 שלום → שָׁלוֹם
+     Hebrew-English · Interjection: hello (conventional greeting) · (dated) goodbye
+  📖 שלום → שָׁלוֹם
+     Hebrew-English · Proper noun: A title of God. · a male given name, Shalom
 ```
 
 - **Up to 5 results**, the most GNOME shows per app. Exact matches come first, from every dictionary, then inflected forms (`hablo` → `hablar`, `ran` → `run`), then, for 3 letters or more, words that start with what you typed.
@@ -117,35 +118,68 @@ Open **GoldenDict-ng** once from the app grid, then close it. That creates its s
 
 ## 2. Add dictionaries
 
-GoldenDict-ng comes with no dictionaries. The easiest good ones for English, Spanish and Hebrew are extracts of the English Wiktionary, already converted to StarDict format (a format GoldenDict-ng reads) by the Wiktionary-Dictionaries project. Each entry has definitions, and many have synonyms and translations.
+GoldenDict-ng comes with no dictionaries. Good free ones come from Wiktionary, already converted to StarDict format (a format GoldenDict-ng reads):
+
+| Dictionary | Look up | Explained in | Entries | From |
+|---|---|---|---|---|
+| English-English | English words | English | 462,000 | Wiktionary-Dictionaries, built November 2022 |
+| Español-Español | Spanish words | **Spanish** (from the Spanish Wiktionary, *Wikcionario*) | 123,000 | Wiktionary StarDict, September 2026 |
+| Hebrew-English | Hebrew words | English | 17,700 | Wiktionary StarDict, September 2026 |
+| Spanish-English (optional) | Spanish words | English, so you also get translations | — | Wiktionary StarDict, September 2026 |
+
+**There is no free Hebrew-Hebrew dictionary to download.** The Hebrew Wiktionary (*ויקימילון*) exists, but wiktextract, the tool these dictionary files are built with, can't read it yet, and I found no other ready-made conversion. The well-known Hebrew dictionaries (Even-Shoshan, Rav-Milim) aren't free to copy. Hebrew-English, built from the English Wiktionary, is the best offline option. Its 17,700 entries cover common words well and rare ones thinly.
+
+The English one comes from a different project because the Wiktionary StarDict project's English-English file is 130 MB to download, against 22 MB here.
 
 ### Step 1: Download them
 
 They go in `~/.local/share/dictionaries`. Linux keeps a user's data files, the files programs read, under `~/.local/share`, as the XDG Base Directory standard says. GoldenDict-ng keeps its own settings and indexes next door, in `~/.local/share/goldendict`. Keep the dictionaries out of that folder, so they don't mix with files the app manages.
 
-About 27 MB in total:
+The Wiktionary StarDict files are compressed with `zstd`, so install that first if it isn't there already:
+
+```bash
+sudo apt install zstd
+```
+
+Then download the three dictionaries, about 50 MB (73 MB once unpacked):
 
 ```bash
 mkdir -p ~/.local/share/dictionaries
 cd ~/.local/share/dictionaries
-base="https://raw.githubusercontent.com/Vuizur/Wiktionary-Dictionaries/master"
-for language in English Spanish Hebrew; do
-    file="${language}-English Wiktionary dictionary stardict.tar.gz"
-    wget -O "$file" "$base/${file// /%20}"
-    tar -xzf "$file"
-    rm "$file"
+
+# English-English
+file="English-English Wiktionary dictionary stardict.tar.gz"
+wget -O "$file" "https://raw.githubusercontent.com/Vuizur/Wiktionary-Dictionaries/master/${file// /%20}"
+tar -xzf "$file"
+rm "$file"
+
+# Español-Español and Hebrew-English (each unpacks into its own folder)
+for name in es-es he-en; do
+    wget -O "$name.tar.zst" "https://github.com/xxyzz/wiktionary_stardict/releases/latest/download/$name.tar.zst"
+    mkdir -p "$name"
+    tar --zstd -xf "$name.tar.zst" -C "$name"
+    rm "$name.tar.zst"
 done
 ```
 
-This gives three folders:
+For Spanish words explained in English as well (19 MB more), run the same loop with `es-en` instead of `es-es he-en`. In the overview this adds a second result for most Spanish words, so the 5 rows fill up faster.
 
-| Folder | Look up | Explained in |
-|---|---|---|
-| `English-English Wiktionary dictionary stardict` | English words | English |
-| `Spanish-English Wiktionary dictionary stardict` | Spanish words | English |
-| `Hebrew-English Wiktionary dictionary stardict` | Hebrew words | English |
+The Wiktionary StarDict project has files for many other language pairs, named `<word language>-<explanation language>`, such as `fr-fr` or `de-en`. See its release page: https://github.com/xxyzz/wiktionary_stardict/releases/latest
 
-These files were built in November 2022. For newer data, or other languages, see [kaikki.org](https://kaikki.org/), which the project builds from.
+<details>
+<summary>Already installed the older Spanish and Hebrew files from this guide?</summary>
+
+An earlier version of this guide used 2022 files from Wiktionary-Dictionaries for Spanish and Hebrew too. Remove them after downloading the new ones, or every Spanish and Hebrew word shows up twice:
+
+```bash
+cd ~/.local/share/dictionaries
+rm -r "Spanish-English Wiktionary dictionary stardict" "Hebrew-English Wiktionary dictionary stardict"
+pkill -f goldendict-search-provider
+```
+
+Then, in GoldenDict-ng, open **Edit → Dictionaries** and click **Rescan now** on the **Sources → Files** tab.
+
+</details>
 
 ### Step 2 (optional): Add the WordNet thesaurus
 
@@ -166,7 +200,7 @@ sudo apt install dict-wn dict-moby-thesaurus
 5. If you did step 2, check whether `/usr/share/dictd` is in the list. GoldenDict-ng adds it by itself the first time it starts, but only if the folder exists then, and in this guide it didn't yet. If it's missing, click **Add…** again and choose `/usr/share/dictd`.
 6. Click **OK**. GoldenDict-ng indexes the dictionaries, which takes a few seconds the first time.
 
-Type `casa` into GoldenDict-ng's search box to check: the Spanish-English entry should appear.
+Type `casa` into GoldenDict-ng's search box to check: the Español-Español entry (*Edificación destinada a vivienda*) should appear.
 
 ### Step 4: Turn off the online sources
 
@@ -242,7 +276,7 @@ Settings → Search
 ## 5. Try it
 
 1. Press `Super` and type `hola`.
-2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *English-English · intj: (informal) Hello, hi, hey.* and *Spanish-English · intj: hello, hi*. Often that's all you need.
+2. Under the app matches, a **GoldenDict-ng** group shows **hola** twice: *English-English · intj: (informal) Hello, hi, hey.* and *Español-Español · Interjección: Expresión de saludo utilizada entre dos o más personas…*. Often that's all you need.
 3. For the full entry, press `↓` until a row is highlighted and press `Enter`, or click it.
 
 GoldenDict-ng opens with the entries for *hola*. If it was already open, it shows the new word in the same window.
@@ -287,14 +321,16 @@ GNOME's overview asks every search provider for results over D-Bus, using the `o
 
 | File | Contents | How the provider uses it |
 |---|---|---|
-| `.ifo` | Name and format | Shows the name, for example *Spanish-English* |
+| `.ifo` | Name and format | Shows the name, for example *Español-Español* |
 | `.idx` | Every headword, sorted, with where its article is | Finds the word by binary search |
 | `.syn` | Other forms (`hablo`, `ran`) and which headword they belong to | Finds inflected forms |
 | `.dict.dz` | The articles, compressed in small independent chunks ("dictzip") | Unpacks only the chunk with the article |
 
 At start it notes where each word begins in the `.idx` and `.syn` files, which takes about 0.25 seconds for the three Wiktionary dictionaries. After that, each search takes about 5 to 10 milliseconds. The files are memory-mapped rather than read in, so they cost little memory.
 
-The article is HTML. The provider turns it into one line: the part of speech, then the senses, separated by `·`, and further parts of speech after a `|`.
+The article is HTML. The provider turns it into one line: the part of speech, then the senses, separated by `·`, and further parts of speech after a `|`. It leaves out pronunciations, inflection tables, examples and synonym lists. It knows the layouts of both projects' files; for any other dictionary it shows the start of the article's text.
+
+The results come from the dictionaries in the order of their folder names. To put, say, Spanish before English, rename the folders so they sort that way (for example `1-es-es`).
 
 **Opening GoldenDict-ng.** GoldenDict-ng only allows one copy of itself to run. When it's already open, a second `goldendict <word>` hands the word to the open window and exits. The `--` makes sure a word such as `-ing` is looked up, not read as an option. For an inflected form, the provider opens the headword (`hablar`, not `hablo`).
 
@@ -319,7 +355,8 @@ Files it uses:
 - **No spelling suggestions.** A misspelled word finds nothing in the overview. Click the GoldenDict-ng icon instead to look up exactly what you typed; GoldenDict-ng suggests close matches.
 - **The window may not come to the front.** If GoldenDict-ng is already open behind other windows, GNOME sometimes shows a *"GoldenDict-ng is ready"* notification instead of raising it. This is GNOME's protection against apps stealing focus. I'm not sure how often it happens with GoldenDict-ng; closing GoldenDict-ng after each lookup avoids it.
 - **The registration is for all users, the provider for one.** Other accounts on the laptop see GoldenDict-ng under **Search Results**, but it gives them no results until they run the installer too.
-- **The Wiktionary files are from 2022** and Hebrew coverage is thinner than English or Spanish.
+- **No Hebrew-Hebrew dictionary** (see [step 2](#2-add-dictionaries)). Hebrew words are explained in English.
+- **The English file is from 2022.** The Spanish and Hebrew files are from September 2026, and new ones come out every few months; download them again to update.
 
 ---
 
@@ -373,8 +410,11 @@ rm -r ~/.local/share/dictionaries
 - GoldenDict-ng's command line (a word as argument, handed to a running window): https://github.com/xiaoyifang/goldendict-ng/blob/staged/src/main.cc
 - GoldenDict-ng on Flathub: https://flathub.org/apps/io.github.xiaoyifang.goldendict_ng
 - Ubuntu 24.04's `goldendict-ng` package and its files: https://packages.ubuntu.com/noble/goldendict-ng
-- Wiktionary dictionaries in StarDict format: https://github.com/Vuizur/Wiktionary-Dictionaries
+- Wiktionary dictionaries in StarDict format (English): https://github.com/Vuizur/Wiktionary-Dictionaries
+- Wiktionary dictionaries in StarDict format (Español-Español, Hebrew-English and many more pairs): https://github.com/xxyzz/wiktionary_stardict and https://xxyzz.github.io/wiktionary_stardict/
+- The tool both projects build on, and the Wiktionary editions it can read (no Hebrew one): https://github.com/tatuylonen/wiktextract
 - The Wiktionary data they're built from: https://kaikki.org/
+- The Hebrew Wiktionary: https://he.wiktionary.org/
 - Where Linux keeps a user's data files (`~/.local/share`): https://specifications.freedesktop.org/basedir-spec/latest/
 - GoldenDict-ng's own folder and the system dictionary folders it adds on first start: https://github.com/xiaoyifang/goldendict-ng/blob/staged/src/config.cc
 - Flatpak's `xdg-data/…` folder permission: https://docs.flatpak.org/en/latest/sandbox-permissions.html
