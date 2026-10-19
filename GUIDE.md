@@ -719,7 +719,7 @@ GNOME has no setting to go quiet when you lock the screen. [MUTE-ON-LOCK.md](MUT
 | Windows asks for the BitLocker recovery key | Boot order or settings changed | Enter the 48-digit key from [Step 2.1](#21-save-your-bitlocker-recovery-key). It usually only asks once |
 | Wi-Fi turns off when you lift the keyboard | Kernel older than 6.11 | `sudo apt full-upgrade`, then check `uname -r` |
 | Docked keyboard suddenly stops responding | Known hardware/firmware glitch with the pogo-pin connection | Lift the keyboard off and put it back |
-| Fn keys don't work | Add-on not installed or not running | Re-run `./install.sh`; reboot |
+| Fn keys don't work (and `evtest` shows nothing when you press them) | Add-on not installed or not running. Without it this keyboard sends nothing to Linux's input layer, so `evtest` and custom shortcuts can't see the keys | `duo features` should list `watch-fn` as running. Then run `duo log` and press a key: *"hotkey mode not confirmed"* means the keyboard ignored the add-on's handshake, so lift it off and put it back. Not installed: re-run `./install.sh`; reboot |
 | Brightness keys only change the top screen | The add-on's root helper isn't installed (doctor: *"root helper not installed"*) | Installed system: re-run `./install.sh`. Live session: `sudo bash system/50-sudoers.sh` (see [4.5](#45-optional-try-the-add-on-without-installing)) |
 | Palm rejection doesn't work right after installing the add-on | The desktop reads touchpad quirks only when it starts | Log out and back in |
 | Session is "Ubuntu on Xorg" and there's no gear on the login screen | `WaylandEnable=false` in `/etc/gdm3/custom.conf` | See [4.2](#42-start-the-live-session), step 4 |
