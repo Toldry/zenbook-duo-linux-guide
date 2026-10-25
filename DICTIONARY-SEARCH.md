@@ -275,6 +275,14 @@ Settings → Search
 └──────────────────────────────────────────────┘
 ```
 
+> **Ubuntu 26.04: a "Search online" result stays on top whatever the order.** Ubuntu 26.04 turns on its own extension, `web-search-provider@ubuntu.com`, which adds a *Search online* (Google) result under your default browser's name and icon, so it looks like a Firefox result. It isn't in the **Search Results** list, so dragging Firefox down doesn't move it. The extension adds itself to GNOME Shell directly, and every time GNOME reloads the listed providers (after an update, or when you change the order) they are placed after it, so it ends up first. Checked in October 2026 on GNOME 50.1 by reading the extension's `extension.js` and GNOME Shell's `search.js`. The simplest fix is to turn the extension off; it takes effect at once and lasts across reboots:
+>
+> ```bash
+> gnome-extensions disable web-search-provider@ubuntu.com
+> ```
+>
+> You lose only the *Search online* result. Turn it back on with `gnome-extensions enable web-search-provider@ubuntu.com`, or use the **Extensions** app.
+
 ---
 
 ## 5. Try it
@@ -379,6 +387,7 @@ Files it uses:
 | Choosing a result does nothing | GoldenDict-ng can't be started | Run `goldendict hola` in a terminal and read the error |
 | Choosing a result opens a Wikipedia article | GoldenDict-ng's online sources are on, and your dictionaries may not be loaded | Do [step 2.4](#step-4-turn-off-the-online-sources), then check [step 2.3](#step-3-point-goldendict-ng-at-them) |
 | GoldenDict-ng opens but finds nothing | No dictionaries loaded | Redo [step 2.3](#step-3-point-goldendict-ng-at-them); check that **Recursive** is ticked |
+| A *Search online* result (with the Firefox icon) appears above GoldenDict-ng, even though Firefox is lower in **Settings → Search** | Ubuntu 26.04's web search extension ignores the list order | `gnome-extensions disable web-search-provider@ubuntu.com`. See the note in [step 4](#4-turn-it-on-in-settings) |
 | WordNet doesn't appear in GoldenDict-ng | Its `dictd` files weren't recognized | Remove `/usr/share/dictd` from the sources; the Wiktionary English dictionary covers synonyms too |
 
 ---
@@ -433,4 +442,7 @@ rm -r ~/.local/share/dictionaries
 - How GNOME Shell finds search providers (system data folders only, `DesktopId`, `Version`): https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/gnome-46/js/ui/remoteSearch.js
 - GNOME Shell reloading providers when the search settings change: https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/gnome-46/js/ui/search.js
 - The **App Search** and **Search Results** settings: https://gitlab.gnome.org/GNOME/gnome-control-center/-/blob/gnome-46/panels/search/cc-search-panel.ui
+- Ubuntu 26.04's web search and Snap search extensions: https://www.omgubuntu.co.uk/2026/03/ubuntu-2604-gnome-search-extensions
+- Where Ubuntu develops those extensions: https://gitlab.gnome.org/Community/Ubuntu
+- GNOME Shell sorting only the D-Bus search providers by `sort-order`: https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/js/ui/remoteSearch.js
 - D-Bus service activation files: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-starting-services
