@@ -56,6 +56,7 @@ A step-by-step guide to running Ubuntu from an external USB drive while Windows 
    - [An ISO date and 24-hour clock in the top bar](#an-iso-date-and-24-hour-clock-in-the-top-bar)
    - [Mute the sound while the screen is locked](#mute-the-sound-while-the-screen-is-locked)
    - [Look up words from the Super search](#look-up-words-from-the-super-search)
+   - [Mouse drags that break into clicks](#mouse-drags-that-break-into-clicks)
 10. [Troubleshooting](#10-troubleshooting)
 11. [How to undo everything](#11-how-to-undo-everything)
 12. [Sources](#12-sources)
@@ -705,6 +706,10 @@ GNOME has no setting to go quiet when you lock the screen. [MUTE-ON-LOCK.md](MUT
 
 [DICTIONARY-SEARCH.md](DICTIONARY-SEARCH.md) sets up GoldenDict-ng, an offline dictionary app, with English, Spanish and Hebrew dictionaries from Wiktionary. It then adds GoldenDict-ng to **Settings → Search**, so you can press `Super`, type a word, and open its definitions, synonyms and translations.
 
+### Mouse drags that break into clicks
+
+If dragging only works when you press the mouse button hard, the button's switch is wearing out and sends short releases while you hold it. [MOUSE-CHATTER.md](MOUSE-CHATTER.md) shows how to confirm that with `evtest`, and installs a small background program that hides those releases.
+
 ---
 
 ## 10. Troubleshooting
@@ -729,6 +734,7 @@ GNOME has no setting to go quiet when you lock the screen. [MUTE-ON-LOCK.md](MUT
 | Live session stuck at *"Please remove the installation medium, then press ENTER"*; no keyboard responds | Ubuntu has already shut down, and the keyboard drivers are gone | **Hold the power button for about 10 seconds.** Safe at this point |
 | **Bottom screen not detected in Windows** (Device Manager → View → Show hidden devices → Monitors shows a greyed-out *MyASUS_Splendid*). Restarts and `Win + Ctrl + Shift + B` don't help | The laptop's embedded controller (the always-on chip that manages power) kept the bottom panel switched off, typically after a forced power-off | **Embedded-controller reset:** shut down, **unplug the charger**, **detach the keyboard** (not resting on the screen), **hold the power button for 40 seconds** (keep holding even if it turns on), release, plug the charger back in, power on |
 | Ubuntu 26.04: pressing `Super` and typing shows a Firefox *Search online* result first, even though Firefox is near the bottom of **Settings → Search** | It comes from Ubuntu's `web-search-provider@ubuntu.com` extension, not from Firefox, and the extension ignores the list order | `gnome-extensions disable web-search-provider@ubuntu.com` (undo with `enable`). Details in [DICTIONARY-SEARCH.md](DICTIONARY-SEARCH.md#4-turn-it-on-in-settings) |
+| A mouse drag (moving a window, selecting text) breaks into several clicks unless you press hard | The mouse's switch is worn and sends a release and press about 50 ms apart, which libinput doesn't filter | Confirm with `sudo evtest`, then install the filter from [MOUSE-CHATTER.md](MOUSE-CHATTER.md) |
 | Ubuntu very slow | The USB drive is too slow | Use an external SSD on a USB-C port |
 | A Windows update made the USB drive unbootable | A Secure Boot list (DBX/SBAT) update blocked an old boot loader (happened in August 2024) | Boot the **installer stick**, open a terminal in the live session, and follow Ubuntu's current guidance for that update; or reinstall onto the USB drive with a newer Ubuntu ISO. Windows is not affected |
 

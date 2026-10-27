@@ -1,0 +1,115 @@
+#!/usr/bin/python3
+"""Hide release-then-press chatter on a worn mouse button.
+
+Grabs the physical mouse and re-emits its events through a virtual (uinput)
+mouse. A button release is held back for HOLD_MS; if the same button is
+pressed again inside that window, both the release and the press are dropped,
+so a drag stays one continuous press. Real releases arrive HOLD_MS late.
+
+The evtest capture from the MX Vertical (2026-10-27) showed spurious
+release->press gaps of 46-52 ms in the middle of drags, so the default
+window is 70 ms.
+
+Needs: sudo apt install python3-evdev
+Usage: sudo mouse-debounce ["device name substring"] [hold_ms]
+The defaults come from $MOUSE_DEBOUNCE_DEVICE and $MOUSE_DEBOUNCE_HOLD_MS,
+or else "MX Vertical" and 70 ms. See MOUSE-CHATTER.md.
+
+Waits for the mouse to appear and re-attaches after Bluetooth reconnects.
+Written against the python-evdev API; not yet run on real hardware.
+"""
+import os
+import select
+import sys
+import time
+
+import evdev
+from evdev import ecodes
+
+DEFAULT_DEVICE_NAME = "MX Vertical"
+DEFAULT_HOLD_MS = 70
+VIRTUAL_DEVICE_NAME = "debounced-mouse"
+WATCHED_BUTTONS = {ecodes.BTN_LEFT}
+RESCAN_INTERVAL_SECONDS = 2
+
+
+def find_device(name_substring):
+    for path in evdev.list_devices():
+        device = evdev.InputDevice(path)
+        is_match = (name_substring in device.name
+                    and device.name != VIRTUAL_DEVICE_NAME
+                    and ecodes.EV_REL in device.capabilities())
+        if is_match:
+            return device
+        device.close()
+    return None
+
+
+def forward_with_debounce(physical, hold_seconds):
+    virtual = evdev.UInput.from_device(physical, name=VIRTUAL_DEVICE_NAME)
+    physical.grab()  # stop the compositor from seeing the raw device
+    pending_release_deadline = {}  # button code -> monotonic deadline
+
+    def flush_expired_releases(now):
+        for button, deadline in list(pending_release_deadline.items()):
+            if now >= deadline:
+                virtual.write(ecodes.EV_KEY, button, 0)
+                virtual.syn()
+                del pending_release_deadline[button]
+
+    try:
+        while True:
+            if pending_release_deadline:
+                wait = min(pending_release_deadline.values()) - time.monotonic()
+                timeout = max(wait, 0)
+            else:
+                timeout = None
+            readable, _, _ = select.select([physical.fd], [], [], timeout)
+            flush_expired_releases(time.monotonic())
+            if not readable:
+                continue
+            for event in physical.read():
+                is_watched_button = (event.type == ecodes.EV_KEY
+                                     and event.code in WATCHED_BUTTONS)
+                if is_watched_button and event.value == 0:
+                    deadline = time.monotonic() + hold_seconds
+                    pending_release_deadline[event.code] = deadline
+                    continue
+                if (is_watched_button and event.value == 1
+                        and event.code in pending_release_deadline):
+                    del pending_release_deadline[event.code]  # chatter
+                    continue
+                virtual.write_event(event)
+    finally:
+        for button in pending_release_deadline:
+            virtual.write(ecodes.EV_KEY, button, 0)  # never leave it stuck
+        virtual.syn()
+        virtual.close()
+        try:
+            physical.ungrab()
+        except OSError:
+            pass  # device already gone
+
+
+def main():
+    name_substring = (sys.argv[1] if len(sys.argv) > 1 else
+                      os.environ.get("MOUSE_DEBOUNCE_DEVICE",
+                                     DEFAULT_DEVICE_NAME))
+    hold_ms = int(sys.argv[2] if len(sys.argv) > 2 else
+                  os.environ.get("MOUSE_DEBOUNCE_HOLD_MS", DEFAULT_HOLD_MS))
+    while True:
+        physical = find_device(name_substring)
+        if physical is None:
+            time.sleep(RESCAN_INTERVAL_SECONDS)
+            continue
+        print(f"debouncing {physical.name} ({physical.path}), {hold_ms} ms",
+              flush=True)
+        try:
+            forward_with_debounce(physical, hold_ms / 1000)
+        except OSError:
+            print("device disconnected, waiting for it", flush=True)
+            time.sleep(RESCAN_INTERVAL_SECONDS)
+
+
+if __name__ == "__main__":
+    main()

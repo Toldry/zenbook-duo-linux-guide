@@ -1,0 +1,14 @@
+[Unit]
+Description=Hide mouse button chatter that breaks drags into clicks
+Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/MOUSE-CHATTER.md
+
+[Service]
+# Change these with: sudo systemctl edit mouse-debounce
+Environment=MOUSE_DEBOUNCE_DEVICE="MX Vertical"
+Environment=MOUSE_DEBOUNCE_HOLD_MS=70
+ExecStart=/usr/local/bin/mouse-debounce
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
