@@ -130,16 +130,27 @@ Environment=MOUSE_DEBOUNCE_HOLD_MS=90
 The device text only has to be part of the name `evtest` shows. Set the
 window a little above the longest gap you saw in `evtest`.
 
+Two more settings decide what counts as a drag:
+`MOUSE_DEBOUNCE_DRAG_DISTANCE` (default `10`, in mouse counts) and
+`MOUSE_DEBOUNCE_LONG_HOLD_MS` (default `300`). If quick clicks feel slow,
+raise the distance. If short drags still break, lower it.
+
 ---
 
 ## How it works
 
 The program takes the mouse for itself, so GNOME no longer sees it
 directly, and passes every event on through a virtual mouse called
-`debounced-mouse`. It changes one thing: when the left button is released,
-it waits 70 ms before passing the release on. If the button is pressed again
-within that time, it throws away both the release and the new press, so
-to GNOME the button never let go.
+`debounced-mouse`. It changes one thing: when the left button is released
+**during a drag**, it waits 70 ms before passing the release on. If the
+button is pressed again within that time, it throws away both the release
+and the new press, so to GNOME the button never let go.
+
+A press counts as a drag once the pointer has moved a little (10 mouse
+counts, a fraction of a millimetre) or the button has been held for 300 ms.
+A quick click, short and without moving, is passed on at once, so clicks
+feel exactly as they did before. In the MX Vertical capture, every spurious
+release happened while the pointer was moving.
 
 If the mouse disconnects (sleep, out of range, switched off), the program
 waits and takes it over again when it comes back.
@@ -148,10 +159,10 @@ waits and takes it over again when it comes back.
 
 ## Limitations
 
-- Every real release of the left button reaches apps 70 ms later. Most people
-  don't notice this. Gamers might.
-- A double-click where you press again less than 70 ms after letting go
-  becomes a single click. Normal double-clicks are slower than that.
+- At the end of a drag, the release reaches apps 70 ms later. Clicks are not
+  delayed.
+- A short, still press that chatters (under 300 ms, no movement) is not
+  filtered, because it can't be told apart from a quick double-click.
 - Only the left button is filtered.
 - If the switch gets worse and its gaps grow beyond the window, drags break
   again. Raise the window, or replace the switch.

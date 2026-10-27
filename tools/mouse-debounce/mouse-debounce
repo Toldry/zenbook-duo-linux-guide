@@ -2,18 +2,25 @@
 """Hide release-then-press chatter on a worn mouse button.
 
 Grabs the physical mouse and re-emits its events through a virtual (uinput)
-mouse. A button release is held back for HOLD_MS; if the same button is
-pressed again inside that window, both the release and the press are dropped,
-so a drag stays one continuous press. Real releases arrive HOLD_MS late.
+mouse. When a held button is released during a drag, the release is held
+back for HOLD_MS; if the same button is pressed again inside that window,
+both the release and the press are dropped, so the drag stays one continuous
+press.
+
+A press counts as a drag once the pointer has moved DRAG_DISTANCE counts or
+the button has been held LONG_HOLD_MS. Quick clicks (short and still) are
+passed on at once, so they are not delayed.
 
 The evtest capture from the MX Vertical (2026-10-27) showed spurious
-release->press gaps of 46-52 ms in the middle of drags, so the default
-window is 70 ms.
+release->press gaps of 46-52 ms, each in the middle of a drag with the
+pointer moving, so the default window is 70 ms.
 
 Needs: sudo apt install python3-evdev
 Usage: sudo mouse-debounce ["device name substring"] [hold_ms]
 The defaults come from $MOUSE_DEBOUNCE_DEVICE and $MOUSE_DEBOUNCE_HOLD_MS,
-or else "MX Vertical" and 70 ms. See MOUSE-CHATTER.md.
+or else "MX Vertical" and 70 ms. $MOUSE_DEBOUNCE_DRAG_DISTANCE (default 10
+counts) and $MOUSE_DEBOUNCE_LONG_HOLD_MS (default 300) decide what is a
+drag. See MOUSE-CHATTER.md.
 
 Waits for the mouse to appear and re-attaches after Bluetooth reconnects.
 Written against the python-evdev API; not yet run on real hardware.
@@ -28,6 +35,8 @@ from evdev import ecodes
 
 DEFAULT_DEVICE_NAME = "MX Vertical"
 DEFAULT_HOLD_MS = 70
+DEFAULT_DRAG_DISTANCE = 10
+DEFAULT_LONG_HOLD_MS = 300
 VIRTUAL_DEVICE_NAME = "debounced-mouse"
 WATCHED_BUTTONS = {ecodes.BTN_LEFT}
 RESCAN_INTERVAL_SECONDS = 2
@@ -45,23 +54,41 @@ def find_device(name_substring):
     return None
 
 
-def forward_with_debounce(physical, hold_seconds):
+class HeldButton:
+    """A watched button that is down, as far as the virtual mouse knows."""
+
+    def __init__(self, now):
+        self.pressed_at = now
+        self.distance_moved = 0
+        self.release_deadline = None  # set while a release is held back
+
+
+def forward_with_debounce(physical, settings):
     virtual = evdev.UInput.from_device(physical, name=VIRTUAL_DEVICE_NAME)
     physical.grab()  # stop the compositor from seeing the raw device
-    pending_release_deadline = {}  # button code -> monotonic deadline
+    held_buttons = {}  # button code -> HeldButton
+
+    def is_drag(held, now):
+        return (held.distance_moved >= settings["drag_distance"]
+                or now - held.pressed_at >= settings["long_hold_seconds"])
 
     def flush_expired_releases(now):
-        for button, deadline in list(pending_release_deadline.items()):
-            if now >= deadline:
+        for button, held in list(held_buttons.items()):
+            deadline = held.release_deadline
+            if deadline is not None and now >= deadline:
                 virtual.write(ecodes.EV_KEY, button, 0)
                 virtual.syn()
-                del pending_release_deadline[button]
+                del held_buttons[button]
+
+    def pending_deadlines():
+        return [held.release_deadline for held in held_buttons.values()
+                if held.release_deadline is not None]
 
     try:
         while True:
-            if pending_release_deadline:
-                wait = min(pending_release_deadline.values()) - time.monotonic()
-                timeout = max(wait, 0)
+            deadlines = pending_deadlines()
+            if deadlines:
+                timeout = max(min(deadlines) - time.monotonic(), 0)
             else:
                 timeout = None
             readable, _, _ = select.select([physical.fd], [], [], timeout)
@@ -69,19 +96,29 @@ def forward_with_debounce(physical, hold_seconds):
             if not readable:
                 continue
             for event in physical.read():
+                now = time.monotonic()
+                if event.type == ecodes.EV_REL and event.code in (
+                        ecodes.REL_X, ecodes.REL_Y):
+                    for held in held_buttons.values():
+                        held.distance_moved += abs(event.value)
                 is_watched_button = (event.type == ecodes.EV_KEY
                                      and event.code in WATCHED_BUTTONS)
-                if is_watched_button and event.value == 0:
-                    deadline = time.monotonic() + hold_seconds
-                    pending_release_deadline[event.code] = deadline
-                    continue
-                if (is_watched_button and event.value == 1
-                        and event.code in pending_release_deadline):
-                    del pending_release_deadline[event.code]  # chatter
-                    continue
+                if is_watched_button and event.value == 1:
+                    held = held_buttons.get(event.code)
+                    if held is not None and held.release_deadline is not None:
+                        held.release_deadline = None  # chatter: drop both
+                        continue
+                    held_buttons[event.code] = HeldButton(now)
+                elif is_watched_button and event.value == 0:
+                    held = held_buttons.get(event.code)
+                    if held is not None and is_drag(held, now):
+                        held.release_deadline = (
+                            now + settings["hold_seconds"])
+                        continue
+                    held_buttons.pop(event.code, None)  # quick click
                 virtual.write_event(event)
     finally:
-        for button in pending_release_deadline:
+        for button in held_buttons:
             virtual.write(ecodes.EV_KEY, button, 0)  # never leave it stuck
         virtual.syn()
         virtual.close()
@@ -91,12 +128,22 @@ def forward_with_debounce(physical, hold_seconds):
             pass  # device already gone
 
 
+def setting(argv_index, env_name, default):
+    if len(sys.argv) > argv_index:
+        return sys.argv[argv_index]
+    return os.environ.get(env_name, default)
+
+
 def main():
-    name_substring = (sys.argv[1] if len(sys.argv) > 1 else
-                      os.environ.get("MOUSE_DEBOUNCE_DEVICE",
-                                     DEFAULT_DEVICE_NAME))
-    hold_ms = int(sys.argv[2] if len(sys.argv) > 2 else
-                  os.environ.get("MOUSE_DEBOUNCE_HOLD_MS", DEFAULT_HOLD_MS))
+    name_substring = setting(1, "MOUSE_DEBOUNCE_DEVICE", DEFAULT_DEVICE_NAME)
+    hold_ms = int(setting(2, "MOUSE_DEBOUNCE_HOLD_MS", DEFAULT_HOLD_MS))
+    settings = {
+        "hold_seconds": hold_ms / 1000,
+        "drag_distance": int(os.environ.get("MOUSE_DEBOUNCE_DRAG_DISTANCE",
+                                            DEFAULT_DRAG_DISTANCE)),
+        "long_hold_seconds": int(os.environ.get(
+            "MOUSE_DEBOUNCE_LONG_HOLD_MS", DEFAULT_LONG_HOLD_MS)) / 1000,
+    }
     while True:
         physical = find_device(name_substring)
         if physical is None:
@@ -105,7 +152,7 @@ def main():
         print(f"debouncing {physical.name} ({physical.path}), {hold_ms} ms",
               flush=True)
         try:
-            forward_with_debounce(physical, hold_ms / 1000)
+            forward_with_debounce(physical, settings)
         except OSError:
             print("device disconnected, waiting for it", flush=True)
             time.sleep(RESCAN_INTERVAL_SECONDS)
