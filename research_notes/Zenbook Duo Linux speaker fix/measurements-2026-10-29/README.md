@@ -25,5 +25,11 @@ What they show is written up in
 The impulse built from them is in
 [presets/zenbook-duo-ux8406ma](../../../presets/zenbook-duo-ux8406ma/).
 
+- [`dax-spectra.tgz`](dax-spectra.tgz): every `spectrum_*.npz` that
+  `analyze.py` wrote (`captures/` and `captures-raw/`). Unpack it in
+  `~/dax-measure`, and `dax-capture-summary` and `dax-curve-to-fir` run
+  without new recordings. `dax-curve-to-fir` rebuilds the committed impulse
+  from it bit for bit (checked 2026-10-29).
+
 The recordings themselves (`~/dax-measure/captures*/`) are not in the repo
 because of their size.

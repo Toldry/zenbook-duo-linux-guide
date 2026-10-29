@@ -13,23 +13,28 @@ It is specific to this laptop model: on other hardware, record your own with
 
 ## Set it up
 
+`Windows-Music.json` is the author's EasyEffects 8 preset: a Convolver with
+this impulse at +17 dB output gain (above that, the author heard distortion),
+then a Limiter with threshold −1 dB, output −1 dB, attack and lookahead 1 ms.
+Copy both files into place, from this folder:
+
 ```bash
-mkdir -p ~/.local/share/easyeffects/irs
-cp windows-dolby-music.wav ~/.local/share/easyeffects/irs/
+mkdir -p ~/.local/share/easyeffects/irs ~/.local/share/easyeffects/output
 ```
 
-In EasyEffects:
+```bash
+cp windows-dolby-music.wav ~/.local/share/easyeffects/irs/
+cp Windows-Music.json ~/.local/share/easyeffects/output/
+```
 
-1. **Presets → Local**: type `Windows-Music` in *New preset name*, press
-   **+**, and load it.
-2. **Add effect → Convolver**. Under **Impulses**, pick `windows-dolby-music`.
-   Set its **Output** gain to **+17 dB**. Above that, the author heard
-   distortion.
-3. **Add effect → Limiter**, after the Convolver. Set **Threshold** to
-   **−1 dB** and leave the rest at the defaults.
-4. **☰ → Preferences → General**: switch on **Launch service at system
+Those are EasyEffects 8's folders. Version 7 keeps presets in
+`~/.config/easyeffects/output/` and impulses in `~/.config/easyeffects/irs/`.
+Then, in EasyEffects:
+
+1. **Presets → Local**: load `Windows-Music`.
+2. **☰ → Preferences → General**: switch on **Launch service at system
    startup**.
-5. **Presets → Autoload**: pick **Meteor Lake-P HD Audio Controller
+3. **Presets → Autoload**: pick **Meteor Lake-P HD Audio Controller
    Speaker** (GNOME calls it *Speaker - Meteor Lake-P HD Audio Controller*)
    and `Windows-Music`, press **+ Create**, and delete any older entries for
    the same device.
