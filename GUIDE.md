@@ -632,6 +632,8 @@ Go back to the table in [Step 4.3](#43-hardware-test-checklist). Items 4, 7, 10,
 - Speakers sound fuller
 - No OLED flicker
 
+For speakers that sound like Windows with Dolby, set up the EasyEffects preset in [presets/zenbook-duo-ux8406ma](presets/zenbook-duo-ux8406ma/). It was measured from this laptop's Windows install.
+
 ### 8.5 Keep the session on GNOME + Wayland
 
 On the login screen, a gear icon (bottom-right, after clicking your name) lets you pick the session. Keep it on **Ubuntu** (Wayland), **not "Ubuntu on Xorg"**. The display features of the add-on need GNOME on Wayland.
