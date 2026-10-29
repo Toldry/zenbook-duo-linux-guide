@@ -1,0 +1,40 @@
+Pink noise at the reference level, left channel, in dB against the test sound.
+'off' = Dolby off in Dolby Access, 'music' = Dolby on.
+    band      off    music    Dolby      raw  off-raw
+   47 Hz   -37.37   -63.40   -26.03   -37.35    -0.02
+   94 Hz   -28.11   -25.41    +2.70   -28.10    -0.01
+  141 Hz   -23.14   -11.30   +11.84   -23.15    +0.01
+  234 Hz   -16.16    -5.59   +10.57   -16.15    -0.01
+  328 Hz   -16.32    -9.85    +6.47   -16.31    -0.01
+  469 Hz   -14.28   -17.82    -3.54   -14.28    +0.00
+  656 Hz   -19.85   -23.49    -3.64   -19.84    -0.00
+  844 Hz   -24.94   -24.31    +0.63   -24.94    -0.00
+ 1031 Hz   -23.91   -23.34    +0.58   -23.91    -0.00
+ 1313 Hz   -22.17   -22.09    +0.08   -22.17    -0.01
+ 1688 Hz   -20.55   -18.43    +2.12   -20.55    -0.00
+ 2250 Hz   -20.23   -14.43    +5.80   -20.22    -0.00
+ 3000 Hz   -20.53   -15.16    +5.37   -20.53    -0.00
+ 3750 Hz   -20.94   -19.38    +1.55   -20.94    -0.00
+ 4688 Hz   -20.20   -16.37    +3.83   -20.20    -0.00
+ 5813 Hz   -15.44    -9.92    +5.52   -15.44    -0.00
+ 7125 Hz   -12.22    -4.92    +7.30   -12.22    -0.00
+ 9000 Hz   -12.37    -2.06   +10.31   -12.37    -0.00
+11250 Hz   -15.83    -5.82   +10.01   -15.83    -0.00
+13875 Hz   -19.05   -13.04    +6.01   -19.05    -0.00
+19688 Hz   -22.47   -19.70    +2.77   -22.47    -0.00
+
+Broadband gain, 100 Hz-10 kHz power average (leveler ladder, quietest input first):
+      sound    input      off    music    Dolby
+     pink60      -60    -8.69   +24.97   +33.65
+     pink48      -48    -8.69   +18.87   +27.56
+ pink_quiet      -42    -8.69   +15.38   +24.07
+     pink30      -30    -8.69    +4.54   +13.22
+     pink24      -24   -10.94    -0.77   +10.16
+       pink      -18   -15.23    -6.87    +8.36
+     pink14      -14   -19.16   -10.98    +8.17
+
+Stereo widening, side/mid change against the test sound, median 200 Hz-18 kHz:
+  stereo_pink        off      +0.00 dB
+  stereo_pink        music    -0.32 dB
+  stereo_correlated  off      +0.02 dB
+  stereo_correlated  music    +6.33 dB
