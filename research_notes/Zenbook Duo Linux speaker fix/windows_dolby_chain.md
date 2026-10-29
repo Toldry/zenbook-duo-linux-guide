@@ -1141,3 +1141,7 @@ Balanced) and summarised with
   to 1 kHz. That is far beyond the converter's own ~1 dB acceptance band.
   [`tools/dax-curve-to-fir`](../../tools/dax-curve-to-fir/) builds an
   EasyEffects impulse from the measured curve instead.
+- **Listening result (2026-10-29).** A new EasyEffects preset with just the
+  `dax-curve-to-fir` impulse in a Convolver, then a Limiter at −1 dB, sounded
+  "much better than previous attempts" to the user. Convolver output gain
+  above +17 dB audibly distorted.

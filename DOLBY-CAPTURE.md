@@ -246,7 +246,12 @@ mkdir -p ~/.local/share/easyeffects/irs
 cp ~/dax-measure/windows-dolby-music.wav ~/.local/share/easyeffects/irs/
 ```
 
-In EasyEffects, load your preset, save it under a new name (so you can switch back), open **Convolver**, and pick `windows-dolby-music` as the impulse. The filter only cuts, by up to about 20 dB in the midrange, so the sound gets much quieter: turn the volume up, or raise the convolver's output gain until the limiter after it just starts to act. Windows makes up the same loss with its volume leveler (3.2b).
+In EasyEffects, make a **new, empty preset**. Don't copy the converter's preset: its own EQ and band limiting would stack on top of a curve that already holds everything Windows does. Then add two effects:
+
+1. **Convolver**: under **Impulses**, pick `windows-dolby-music` (or import `~/dax-measure/windows-dolby-music.wav`).
+2. **Limiter**, after the Convolver: set **Threshold** to −1 dB and leave the rest at its defaults.
+
+The filter only cuts, by up to about 20 dB in the midrange, so the sound gets much quieter. Raise the Convolver's **Output** gain until it is as loud as you want, and stop when it starts to distort: on the author's Duo, +17 dB was the limit (2026-10-29). Windows makes up the same loss with its volume leveler (3.2b). By ear, this preset sounded much better than the converter's presets on the author's Duo.
 
 ### 3.4 What to do with the results
 
