@@ -150,22 +150,41 @@ foreach ($s in $sounds) { python capture_dax.py --stimulus "stimulus_$s.wav" --l
 
 Each sound plays for 10–30 seconds; the whole round takes about 5 minutes. Leave the laptop alone while it runs. Each recording lands in `C:\dax-measure\captures\` as `loopback_<sound>_off.wav` plus a `.json`.
 
-### 2.5 Record with Dolby on
+### 2.4b Record with all sound effects off (optional, 2 minutes)
 
-In **Dolby Access**, switch Dolby Atmos back **on**, pick the **Dynamic** profile (✔ in the left-hand list), and set the **intelligent equalizer** to **Balanced**. That matches the preset you built on Linux. Then run:
+Switching Dolby off in Dolby Access leaves the Realtek effects that Windows runs after Dolby (see [the effect chain](research_notes/Zenbook%20Duo%20Linux%20speaker%20fix/windows_dolby_chain.md#addendum-2026-10-29-the-effect-chain-read-from-the-users-own-windows-install)). This round turns every effect off, so comparing it with 2.4 shows whether the Realtek ones change the sound.
+
+Open **Settings → System → Sound → Speakers → Audio enhancements** and pick **Off**. Then run:
 
 ```powershell
-foreach ($s in $sounds) { python capture_dax.py --stimulus "stimulus_$s.wav" --label dynamic }
+foreach ($s in 'sweep','pink') { python capture_dax.py --stimulus "stimulus_$s.wav" --label off --out captures-raw }
+```
+
+`--out captures-raw` keeps these recordings apart from the 2.4 ones, which have the same names. Set **Audio enhancements** back to **Device Default Effects** afterwards, or Dolby won't run in 2.5.
+
+### 2.5 Record with Dolby on
+
+In **Dolby Access**, switch Dolby Atmos back **on** and pick the profile you normally listen with (✔ in the left-hand list). This guide uses **Music** with the **intelligent equalizer** on **Balanced**, because that is what the author's Duo had set. To check yours from Ubuntu, with the Windows partition open in Files:
+
+```bash
+grep -E 'SelectedMainProfile|ieq-bands-set' /run/media/$USER/OS/ProgramData/Dolby/DAX3/Runtime.xml
+```
+
+If yours shows another profile, use its name (`dynamic`, `movie`, `game`, `voice`) in place of `music` here and in Part 3. Build the Linux preset from the same profile (`--profile music` for the converter), or the comparison is between two different tunings. Then run:
+
+```powershell
+foreach ($s in $sounds) { python capture_dax.py --stimulus "stimulus_$s.wav" --label music }
 ```
 
 (If you closed the terminal in between, define `$sounds` again first, as in 2.4.)
 
-The script compares each recording with the matching Dolby-off one. If it warns that a capture is *"essentially identical to the OFF baseline"*, Dolby wasn't on: check Dolby Access and run that sound again. If it asks you to confirm the Dolby profile, answer `y` when Dolby Access shows *Dynamic*.
+The script compares each recording with the matching Dolby-off one. If it warns that a capture is *"essentially identical to the OFF baseline"*, Dolby wasn't on: check Dolby Access and run that sound again. If it asks you to confirm the Dolby profile, answer `y` when Dolby Access shows the profile you picked.
 
 ### 2.6 Copy the recordings to the stick
 
 ```powershell
 Copy-Item -Recurse C:\dax-measure\captures E:\dax-measure\
+if (Test-Path C:\dax-measure\captures-raw) { Copy-Item -Recurse C:\dax-measure\captures-raw E:\dax-measure\ }
 (Get-ChildItem E:\dax-measure\captures\loopback_*.wav).Count    # expect 24
 ```
 
@@ -184,6 +203,7 @@ STICK=/run/media/$USER/<stick>      # as in 1.3
 mkdir -p ~/dax-measure/captures
 cp "$STICK"/dax-measure/captures/loopback_* ~/dax-measure/captures/
 ls ~/dax-measure/captures/loopback_*.wav | wc -l     # expect 24
+cp -r "$STICK"/dax-measure/captures-raw ~/dax-measure/ 2>/dev/null     # only if you did 2.4b
 ```
 
 ### 3.2 Run the analysis
@@ -195,7 +215,7 @@ cd ~/dax-measure
 XML=$(ls /run/media/$USER/OS/Windows/System32/DriverStore/FileRepository/dax3_ext_*/DEV_0294_SUBSYS_10431C43_PCI_SUBSYS_1C431043.xml | head -1)
 echo "$XML"
 python3 ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/analyze.py captures/loopback_*.wav \
-    --xml "$XML" --profile dynamic --curve balanced 2>&1 | tee analysis-summary.txt
+    --xml "$XML" --profile music --curve balanced 2>&1 | tee analysis-summary.txt
 ```
 
 `echo` should print one path ending in `.xml`. The analysis takes a minute and writes into `~/dax-measure`:
@@ -203,11 +223,11 @@ python3 ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/analyze.py c
 | File | What it shows |
 |---|---|
 | `analysis-summary.txt` | Everything the command printed |
-| `compare_loopback_pink_dynamic_…png` | Dolby's real tone shape against the one the converter builds. **The most useful picture.** Within about 1 dB means the converter's curve is right |
-| `spectrum_stereo_*_dynamic_*.npz` and the summary's side/mid lines | How much Dolby widens the stereo image |
+| `compare_loopback_pink_music_…png` | Dolby's real tone shape against the one the converter builds. **The most useful picture.** Within about 1 dB means the converter's curve is right |
+| `spectrum_stereo_*_music_*.npz` and the summary's side/mid lines | How much Dolby widens the stereo image |
 | `analysis_*.txt` | Per-recording details, including whether Dolby behaves like a fixed filter |
 
-Open the pictures with `xdg-open ~/dax-measure/compare_loopback_pink_dynamic_*_L.png`.
+Open the pictures with `xdg-open ~/dax-measure/compare_loopback_pink_music_*_L.png`.
 
 ### 3.3 What to do with the results
 

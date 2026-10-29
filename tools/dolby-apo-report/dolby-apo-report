@@ -98,7 +98,8 @@ section "3. The DLL behind each GUID in sections 1, 2 and 4"
 while read -r guid; do
     class=$(export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' \
         "\\Classes\\CLSID\\$guid" 2> /dev/null)
-    if [[ $class == *InprocServer32* ]]; then
+    # The .inf files spell it InProcServer32, so match without case.
+    if [[ ${class,,} == *inprocserver32* ]]; then
         grep -a -v -E '^$|^Windows Registry Editor' <<< "$class"
     fi
 done < "$work_dir/guids.txt"

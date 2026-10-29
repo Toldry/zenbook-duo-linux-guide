@@ -1101,3 +1101,11 @@ flowchart LR
   so it is not raw output. A third capture with *Audio enhancements: Off*
   bypasses all APOs. Comparing it with "Dolby off" isolates the Realtek
   stages.
+- **The profile Windows uses is "music", not "dynamic".** The user's
+  `C:\ProgramData\Dolby\DAX3\Runtime.xml` (written 2026-10-29) has
+  `SelectedMainProfile` = `music`, with `ieq-enable` = 1 and `ieq-bands-set`
+  = `ieq_balanced`. The tuning XML has `tuning_version` 11. A Linux preset
+  built with `--profile dynamic` (or with no `--profile`, which builds the
+  first profile in the file) therefore copies a tuning this laptop does not
+  play. Confidence: high that "music" was selected at the last Windows
+  shutdown; this file is what Dolby Access updates when settings change.
