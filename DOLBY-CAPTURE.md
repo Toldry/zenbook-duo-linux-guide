@@ -31,8 +31,8 @@ Windows can record its own sound output digitally ("loopback"), right after Dolb
 
 ```mermaid
 flowchart LR
-    A["Ubuntu: make test sounds"] -->|USB stick| B["Windows: play them,<br/>record Dolby's output<br/>(Dolby off, then on)"]
-    B -->|USB stick| C["Ubuntu: compare with<br/>what the converter builds"]
+    A["Ubuntu: make test sounds"] -->|"C:\dax-measure"| B["Windows: play them,<br/>record Dolby's output<br/>(Dolby off, then on)"]
+    B -->|"C:\dax-measure"| C["Ubuntu: compare with<br/>what the converter builds"]
     C --> D["A corrected preset,<br/>or a converter fix"]
 ```
 
@@ -45,7 +45,7 @@ flowchart LR
 | Item | Notes |
 |---|---|
 | The converter, already cloned | `~/workspace/speaker-tuning-to-easyeffects` in this guide; adjust the path if yours differs |
-| A USB stick with ~100 MB free | To carry files between the two systems |
+| ~100 MB free on the Windows partition | Files pass between the systems through `C:\dax-measure`, which Ubuntu sees as `/run/media/$USER/OS/dax-measure` |
 | Windows with **Dolby Access** | Already on the Duo. Start → type *Dolby* to check |
 | Internet on Windows | To install Python once |
 
@@ -73,32 +73,26 @@ ls stimulus_*.wav | wc -l
 
 This writes every test sound (about 250 MB) plus a `.json` file for each into `~/dax-measure`. The last line should print a number around 20.
 
-### 1.3 Copy what Windows needs to the USB stick
+### 1.3 Copy what Windows needs to the Windows partition
 
-Plug in the stick and find where Ubuntu mounted it:
-
-```bash
-ls /run/media/$USER/ /media/$USER/ 2>/dev/null
-```
-
-Then copy the capture script and three groups of test sounds: the basic tone-shape set, the stereo-width set, and the leveler set (loudness at seven levels). Replace `<stick>` with the name the last command showed:
+Open the Windows partition in **Files** (it's in the sidebar, often called *OS*). Then copy the capture script and three groups of test sounds into `C:\dax-measure`: the basic tone-shape set, the stereo-width set, and the leveler set (loudness at seven levels):
 
 ```bash
-STICK=/run/media/$USER/<stick>      # or /media/$USER/<stick>
-mkdir -p "$STICK/dax-measure"
-cp ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/capture_dax.py "$STICK/dax-measure/"
+WIN=/run/media/$USER/OS/dax-measure
+mkdir -p "$WIN"
+cp ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/capture_dax.py "$WIN/"
 cd ~/dax-measure
 for s in sweep sweep_quiet pink pink_quiet multitone \
          stereo_pink stereo_correlated \
          pink60 pink48 pink30 pink24 pink14; do
-    cp "stimulus_$s.wav" "stimulus_$s.json" "$STICK/dax-measure/"
+    cp "stimulus_$s.wav" "stimulus_$s.json" "$WIN/"
 done
-ls "$STICK/dax-measure" | wc -l     # expect 25
+ls "$WIN" | wc -l     # expect 25
 ```
 
-Every `.wav` needs its `.json` next to it; the analysis reads the sound's layout from it.
+Every `.wav` needs its `.json` next to it; the analysis reads the sound's layout from it. If `mkdir` says *Read-only file system*, see [Troubleshooting](#troubleshooting).
 
-Eject the stick (the eject icon in Files), shut Ubuntu down, and start Windows.
+Shut Ubuntu down and start Windows.
 
 ---
 
@@ -128,12 +122,11 @@ python -m pip install sounddevice numpy scipy soundfile pycaw comtypes pyaudiowp
 3. Set the volume **low** (10–20%). The laptop plays sweeps and noise during recording. The recording is taken before the volume control, so the level doesn't affect the result.
 4. Close music, video and browser tabs that might make sounds.
 
-### 2.3 Copy the files from the stick
+### 2.3 Go to the files
 
-Plug in the stick and check its drive letter in File Explorer (e.g. `E:`). Replace `E:` below if yours differs:
+The files from 1.3 are in `C:\dax-measure`:
 
 ```powershell
-Copy-Item -Recurse E:\dax-measure C:\dax-measure
 cd C:\dax-measure
 ```
 
@@ -180,35 +173,33 @@ foreach ($s in $sounds) { python capture_dax.py --stimulus "stimulus_$s.wav" --l
 
 The script compares each recording with the matching Dolby-off one. If it warns that a capture is *"essentially identical to the OFF baseline"*, Dolby wasn't on: check Dolby Access and run that sound again. If it asks you to confirm the Dolby profile, answer `y` when Dolby Access shows the profile you picked.
 
-### 2.6 Copy the recordings to the stick
+### 2.6 Check the recordings
 
 ```powershell
-Copy-Item -Recurse C:\dax-measure\captures E:\dax-measure\
-if (Test-Path C:\dax-measure\captures-raw) { Copy-Item -Recurse C:\dax-measure\captures-raw E:\dax-measure\ }
-(Get-ChildItem E:\dax-measure\captures\loopback_*.wav).Count    # expect 24
+(Get-ChildItem C:\dax-measure\captures\loopback_*.wav).Count    # expect 24
 ```
 
-You can set the speaker format and volume back as they were. Shut Windows down (**Shut down**, not Restart, so the speakers start cleanly in Ubuntu) and start Ubuntu.
+They stay in `C:\dax-measure`, where Ubuntu picks them up. You can set the speaker format and volume back as they were. Shut Windows down (**Shut down**, not Restart, so the speakers start cleanly in Ubuntu) and start Ubuntu.
 
 ---
 
 ## Part 3: Compare (Ubuntu)
 
-### 3.1 Copy the recordings back
+### 3.1 Copy the recordings from the Windows partition
 
-Plug in the stick:
+Open the Windows partition in **Files** again, then:
 
 ```bash
-STICK=/run/media/$USER/<stick>      # as in 1.3
+WIN=/run/media/$USER/OS/dax-measure
 mkdir -p ~/dax-measure/captures
-cp "$STICK"/dax-measure/captures/loopback_* ~/dax-measure/captures/
+cp "$WIN"/captures/loopback_* ~/dax-measure/captures/
 ls ~/dax-measure/captures/loopback_*.wav | wc -l     # expect 24
-cp -r "$STICK"/dax-measure/captures-raw ~/dax-measure/ 2>/dev/null     # only if you did 2.4b
+cp -r "$WIN"/captures-raw ~/dax-measure/ 2>/dev/null     # only if you did 2.4b
 ```
 
 ### 3.2 Run the analysis
 
-Open the Windows partition in **Files** (it's in the sidebar, often called *OS*), so the analysis can read the same Dolby tuning file the preset was built from. Then:
+The analysis also reads the Dolby tuning file the preset was built from, on the Windows partition, so keep it open. Then:
 
 ```bash
 cd ~/dax-measure
@@ -251,7 +242,8 @@ Unmount the Windows partition afterwards (the eject icon in Files).
 | `endpoint is muted — capture will be silent` | The speakers are muted | Unmute them and run that sound again |
 | The Dolby-off check complains about sidelobes on the sweep | Another Windows sound effect is active | **Settings → System → Sound → Speakers → Audio enhancements: Off** for the Dolby-off round only, then back to *Device Default Effects* for the Dolby-on round |
 | `python` opens the Microsoft Store | Python isn't on the path | Step 2.1 |
-| `analyze.py` says a `.json` is missing | A sound was copied without its `.json` | Copy both files again (1.3, 2.6) |
+| `analyze.py` says a `.json` is missing | A sound was copied without its `.json` | Copy both files again (1.3, 3.1) |
+| `mkdir` or `cp` in 1.3 says *Read-only file system* | Windows was hibernated or shut down with Fast Startup, so Ubuntu mounts its partition read-only to protect it | In Windows: **Control Panel → Power Options → Choose what the power buttons do → Change settings that are currently unavailable**, untick **Turn on fast startup**, then **Shut down**. Or run 1.3 from Windows instead, copying from Ubuntu's files if Windows can reach them |
 
 ---
 
