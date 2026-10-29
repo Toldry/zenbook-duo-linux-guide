@@ -192,10 +192,12 @@ Open the Windows partition in **Files** again, then:
 ```bash
 WIN=/run/media/$USER/OS/dax-measure
 mkdir -p ~/dax-measure/captures
-cp "$WIN"/captures/loopback_* ~/dax-measure/captures/
+sudo bash -c 'cp "$1"/captures/loopback_* "$2"/captures/; [ -d "$1"/captures-raw ] && cp -r "$1"/captures-raw "$2"/' _ "$WIN" ~/dax-measure
+sudo chown -R "$USER:" ~/dax-measure
 ls ~/dax-measure/captures/loopback_*.wav | wc -l     # expect 24
-cp -r "$WIN"/captures-raw ~/dax-measure/ 2>/dev/null     # only if you did 2.4b
 ```
+
+The copy runs as root because Ubuntu doesn't let your user into folders that Windows created (measured on the Duo, 2026-10-29: `cp` failed with *Permission denied*). It runs inside `bash -c` so the `*` is expanded as root too. `chown` then makes the copies yours.
 
 ### 3.2 Run the analysis
 
