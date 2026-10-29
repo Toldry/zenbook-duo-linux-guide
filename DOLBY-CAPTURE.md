@@ -211,23 +211,37 @@ python3 ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/analyze.py c
     --xml "$XML" --profile music --curve balanced 2>&1 | tee analysis-summary.txt
 ```
 
-`echo` should print one path ending in `.xml`. The analysis takes a minute and writes into `~/dax-measure`:
+`echo` should print one path ending in `.xml`. The analysis takes a minute. It writes `analysis-summary.txt` into `~/dax-measure` and everything else next to the recordings, in `~/dax-measure/captures`:
 
 | File | What it shows |
 |---|---|
 | `analysis-summary.txt` | Everything the command printed |
-| `compare_loopback_pink_music_…png` | Dolby's real tone shape against the one the converter builds. **The most useful picture.** Within about 1 dB means the converter's curve is right |
+| `compare_loopback_pink_music_…png` | The tone shape Windows recorded against the one the converter builds. Within about 1 dB means the converter's curve is right. Each curve is scaled so its loudest band is 0 dB, so the tables don't show overall level |
 | `spectrum_stereo_*_music_*.npz` and the summary's side/mid lines | How much Dolby widens the stereo image |
 | `analysis_*.txt` | Per-recording details, including whether Dolby behaves like a fixed filter |
 
-Open the pictures with `xdg-open ~/dax-measure/compare_loopback_pink_music_*_L.png`.
+Open the main picture with `xdg-open ~/dax-measure/captures/compare_loopback_pink_music_music_balanced_L.png`.
+
+### 3.2b Get the numbers in absolute dB
+
+The analysis scales every curve to its own peak, which hides two things: whether Windows still shapes the sound with Dolby switched off, and how much louder Dolby makes quiet and loud input (the leveler). This guide's [`dax-capture-summary`](tools/dax-capture-summary/) prints both, from the files the analysis just wrote. If you did 2.4b, analyse those recordings first:
+
+```bash
+cd ~/dax-measure
+[ -d captures-raw ] && python3 ~/workspace/speaker-tuning-to-easyeffects/tools/measure_dax/analyze.py \
+    captures-raw/loopback_*.wav > /dev/null
+python3 ~/workspace/zenbook-duo-linux-guide/tools/dax-capture-summary/dax-capture-summary \
+    | tee capture-summary.txt
+```
+
+Adjust `~/workspace/zenbook-duo-linux-guide` if you cloned this guide elsewhere. The *Dolby* column is Dolby's own share of the sound. With 2.4b done, *off-raw* is what Windows still does with Dolby switched off.
 
 ### 3.3 What to do with the results
 
-- **Share them** in this project's conversation, or [open an issue](https://github.com/Toldry/zenbook-duo-linux-guide/issues): `analysis-summary.txt` and the `compare_*.png` pictures are enough to start. The tone-shape, width and leveler numbers say which part of preset B to change.
+- **Share them** in this project's conversation, or [open an issue](https://github.com/Toldry/zenbook-duo-linux-guide/issues): `analysis-summary.txt`, `capture-summary.txt` and the `compare_*.png` pictures are enough to start. The tone-shape, width and leveler numbers say which part of preset B to change.
 - **Help the converter:** its author asked for exactly these recordings for ASUS laptops. Zip them and attach them to a [device report](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects/issues/new?template=device-report.yml), with the XML:
   ```bash
-  cd ~/dax-measure && zip -r zenbook-duo-ux8406ma-dax-captures.zip captures analysis-summary.txt compare_*.png
+  cd ~/dax-measure && zip -r zenbook-duo-ux8406ma-dax-captures.zip captures analysis-summary.txt capture-summary.txt
   ```
 
 Unmount the Windows partition afterwards (the eject icon in Files).

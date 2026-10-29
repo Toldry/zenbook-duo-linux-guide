@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Summarises DOLBY-CAPTURE.md recordings in absolute dB, which
+analyze.py's tables leave out (they peak-normalise every curve).
+
+Reads the spectrum_*.npz files that analyze.py writes next to the
+captures and prints, per band:
+  - the Windows chain with Dolby off, and with Dolby on, against the
+    test sound (0 dB = untouched),
+  - Dolby's own share (on minus off),
+  - with a captures-raw folder (all Windows effects off), what remains
+    when only Dolby is switched off (off minus raw),
+plus the broadband gain at each input level (the leveler ladder) and the
+stereo widening.
+
+Usage: dax-capture-summary [CAPTURE_DIR] [--on LABEL]
+       CAPTURE_DIR defaults to ~/dax-measure/captures, LABEL to music.
+"""
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+
+BAND_CENTRES_HZ = [47, 94, 141, 234, 328, 469, 656, 844, 1031, 1313, 1688,
+                   2250, 3000, 3750, 4688, 5813, 7125, 9000, 11250, 13875,
+                   19688]
+# Leveler ladder from quietest to loudest: (sound, input level in dBFS RMS),
+# as the converter's tools/measure_dax/README.md lists them.
+LEVEL_TAGS = [("pink60", -60), ("pink48", -48), ("pink_quiet", -42),
+              ("pink30", -30), ("pink24", -24), ("pink", -18),
+              ("pink14", -14)]
+BROADBAND_RANGE_HZ = (100.0, 10000.0)
+
+
+def load_spectrum(capture_dir, tag, label, channel="L"):
+    path = capture_dir / f"spectrum_{tag}_{label}_{channel}.npz"
+    if not path.is_file():
+        return None
+    data = np.load(path)
+    if "eq_gain_db_raw" not in data:
+        sys.exit(f"{path} has no absolute gain; re-run analyze.py with the "
+                 "stimulus files next to the captures.")
+    return data["f"], data["eq_gain_db_raw"], data.get("sm_delta_db")
+
+
+def power_mean_db(freqs, gain_db, low_hz, high_hz):
+    """Power average of a dB curve over [low_hz, high_hz]."""
+    mask = (freqs >= low_hz) & (freqs <= high_hz)
+    if not mask.any():
+        return float("nan")
+    return float(10 * np.log10(np.mean(10 ** (gain_db[mask] / 10))))
+
+
+def band_gain_db(freqs, gain_db, centre_hz):
+    """Power average over a third of an octave around centre_hz."""
+    return power_mean_db(freqs, gain_db, centre_hz * 2 ** (-1 / 6),
+                         centre_hz * 2 ** (1 / 6))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("capture_dir", nargs="?",
+                        default=str(Path.home() / "dax-measure/captures"))
+    parser.add_argument("--on", default="music",
+                        help="label of the Dolby-on round (default: music)")
+    args = parser.parse_args()
+    capture_dir = Path(args.capture_dir).expanduser()
+    raw_dir = capture_dir.parent / "captures-raw"
+
+    off = load_spectrum(capture_dir, "pink", "off")
+    on = load_spectrum(capture_dir, "pink", args.on)
+    if off is None or on is None:
+        sys.exit(f"No spectrum_pink_off_L.npz / spectrum_pink_{args.on}_L.npz "
+                 f"in {capture_dir}. Run analyze.py on the captures first.")
+    raw = load_spectrum(raw_dir, "pink", "off")
+    freqs = off[0]
+
+    print(f"Pink noise at the reference level, left channel, in dB against "
+          f"the test sound.\n'off' = Dolby off in Dolby Access, "
+          f"'{args.on}' = Dolby on.")
+    header = f"{'band':>8}  {'off':>7}  {args.on:>7}  {'Dolby':>7}"
+    if raw is not None:
+        header += f"  {'raw':>7}  {'off-raw':>7}"
+    print(header)
+    for centre in BAND_CENTRES_HZ:
+        off_db = band_gain_db(freqs, off[1], centre)
+        on_db = band_gain_db(freqs, on[1], centre)
+        row = f"{centre:>5} Hz  {off_db:+7.2f}  {on_db:+7.2f}  " \
+              f"{on_db - off_db:+7.2f}"
+        if raw is not None:
+            raw_db = band_gain_db(raw[0], raw[1], centre)
+            row += f"  {raw_db:+7.2f}  {off_db - raw_db:+7.2f}"
+        print(row)
+
+    low, high = BROADBAND_RANGE_HZ
+    print(f"\nBroadband gain, {low:.0f} Hz-{high / 1000:.0f} kHz power "
+          f"average (leveler ladder, quietest input first):")
+    print(f"{'sound':>11}  {'input':>7}  {'off':>7}  {args.on:>7}  "
+          f"{'Dolby':>7}")
+    for tag, input_dbfs in LEVEL_TAGS:
+        level_off = load_spectrum(capture_dir, tag, "off")
+        level_on = load_spectrum(capture_dir, tag, args.on)
+        if level_off is None or level_on is None:
+            print(f"{tag:>11}  {input_dbfs:>7}  (missing)")
+            continue
+        off_db = power_mean_db(level_off[0], level_off[1], low, high)
+        on_db = power_mean_db(level_on[0], level_on[1], low, high)
+        print(f"{tag:>11}  {input_dbfs:>7}  {off_db:+7.2f}  {on_db:+7.2f}  "
+              f"{on_db - off_db:+7.2f}")
+
+    print("\nStereo widening, side/mid change against the test sound, "
+          "median 200 Hz-18 kHz:")
+    for tag in ("stereo_pink", "stereo_correlated"):
+        for label in ("off", args.on):
+            spectrum = load_spectrum(capture_dir, tag, label)
+            if spectrum is None or spectrum[2] is None:
+                print(f"  {tag:<18} {label:<8} (missing)")
+                continue
+            band = (spectrum[0] >= 200) & (spectrum[0] <= 18000)
+            print(f"  {tag:<18} {label:<8} "
+                  f"{float(np.median(spectrum[2][band])):+.2f} dB")
+
+
+if __name__ == "__main__":
+    main()
