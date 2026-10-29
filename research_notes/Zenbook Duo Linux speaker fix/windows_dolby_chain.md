@@ -1029,3 +1029,75 @@ comparison on this laptop.
   specific advice.
 - Whether DAX on this laptop runs VBE or sliding bass, and whether Windows
   applies the 1C43 Realtek codec EQ, is unknown without a Windows capture.
+
+## Addendum, 2026-10-29: the effect chain read from the user's own Windows install
+
+### Takeaway
+**[UX8406MA]** Read from the offline registry with
+[`tools/dolby-apo-report`](../../tools/dolby-apo-report/) on the user's
+laptop. On the active "Speakers" endpoint (Realtek(R) Audio, endpoint
+`{6ce70c4e-482c-424d-bd9d-ffac566d847f}`), Windows runs a Dolby APO and then
+a Realtek APO in both the stream and the endpoint slot, and a Realtek APO alone
+in the mode slot. So the "Realtek APO after Dolby" from section 1 is
+confirmed, and a Windows loopback capture includes it.
+
+```mermaid
+flowchart LR
+    A["App stream"] --> S1["SFX: Dolby wrapper<br/>DolbyDax3Apo.dll<br/>→ DAPVR"]
+    S1 --> S2["SFX: CRtkAPOSFX2<br/>(Realtek)"]
+    S2 --> M["Mix"] --> MF["MFX: CRtkAPOMFX2<br/>(Realtek)"]
+    MF --> E1["EFX: Dolby wrapper<br/>DolbyDax3Apo.dll<br/>→ VLLDP150"]
+    E1 --> E2["EFX: CRtkAPOEFX2<br/>(Realtek)"]
+    E2 --> L(["loopback tap"]) --> K["Realtek driver,<br/>codec, CS35L41 amps"]
+```
+
+### Cited Findings (all read from the user's install)
+- **Endpoint effect lists.** In the endpoint's `FxProperties`:
+  `PKEY_CompositeFX_StreamEffectClsid` (`{d04e05a6-…},13`) holds
+  `{0EBD8605-…}` then `{905069CC-…}`. `…ModeEffectClsid` (`,14`) holds
+  `{90609662-…}`. `…EndpointEffectClsid` (`,15`) holds `{0EBD8607-…}` then
+  `{90705486-…}`. The offload slots (`,19`, `,20`) hold the Dolby `0EBD8611`
+  and `0EBD8612` wrappers, plus Realtek `{90C0662B-…}` in `,20`. The property
+  key names come from the `[Strings]` section of `dax3_swc_aposvc.inf`.
+- **Who is who.** `dax3_swc_aposvc.inf` names `{0EBD8605…}`, `{0EBD8607…}`,
+  `{0EBD8611…}` and `{0EBD8612…}` `FX_DolbyAPO_Wrapper{SFX,EFX,OSFX,OMFX}_CLSID_V2`
+  and registers them with `InProcServer32` = `%13%\DolbyDax3Apo.dll`. The
+  registry names the Realtek APOs `CRtkAPOSFX2`, `CRtkAPOMFX2` and
+  `CRtkAPOEFX2`, and `hdx_asusext_dolby_dsp_wrap36_rtkgen5_pc.inf` names them
+  `REALTEK_{SFX,MFX,EFX,OMFX}_CLSID`.
+- **What the wrapper loads.** `HKLM\SOFTWARE\Dolby\Wrapper` has
+  `APO_SFX` = `APO_OSFX` = `{E77F483A-…}` and `APO_EFX` = `APO_MFX` =
+  `APO_OMFX` = `{5CA784EC-…}`. The `.inf` names these `FX_DOLBYAPO_DAPVR_CLSID`
+  and `FX_DOLBYAPO_VLLDP150_CLSID`. `HKLM\SOFTWARE\Dolby\DAX` has
+  `DolbyEnable` = 1.
+- **The ASUS extension.** It routes every render topology to the
+  `SysCustomizedFx` effect set, sets `DCHDolby`=1 and `DCHRealtek`=0, and sets
+  `PKEY_BYPASS_TP_EFFECTS` (`{0F8412D3-…},0`) to 1.
+- **`{6CA6A085-…},0` = "0.4.0"** sits in the endpoint's `Properties` and in
+  the driver's `ApoPreset1\EP\0`. It is a property value, not an effect class.
+- **Realtek mode-default settings.** These point at ASUS files in
+  `hdx_asusext_apot_g5-st_ag40_aa51_af68_n-mtl.inf_amd64_…`
+  (`netstate2_spkrverf`, `netstate2_AG40_n_mtl`, `netstate2_AF68`,
+  `UBD_AA51_85`, `NNAEC.rbin`).
+- **Only one copy** of the 1C43 tuning XML exists, in
+  `dax3_ext_rtk.inf_amd64_12abc9a96438faa5` (sha256 `8530617c…`), so the
+  converter read the XML that Windows uses.
+
+### Inferences
+- **The SFX stage is DAPVR, not DAPv251.** I take that from the CLSID mapping;
+  which DLL hosts DAPVR is probably `DolbyAPOVR.dll`, judging by its name
+  (about 85% confident). That DAPVR performs the XML's `tuning-cp` stage, and
+  VLLDP150 its `tuning-vlldp` stage, matches the converter's two-stage model
+  (about 75% confident).
+- **`PKEY_BYPASS_TP_EFFECTS` = 1** probably tells the Realtek APOs to bypass
+  their own sound effects while Dolby is in charge (about 60% confident). If
+  so, the Realtek stages pass audio through apart from format work. If not,
+  they add processing that a "Dolby off" capture still contains.
+- **The `netstate2_*`, `UBD_*` and `NNAEC` files** look like neural-network
+  or speaker-model data for Realtek's processing. `NNAEC` reads as neural echo
+  cancellation, for the microphone (about 70% confident). What
+  `netstate2_spkrverf` does is unknown.
+- **A capture with Dolby switched off in Dolby Access** keeps the Realtek APOs,
+  so it is not raw output. A third capture with *Audio enhancements: Off*
+  bypasses all APOs. Comparing it with "Dolby off" isolates the Realtek
+  stages.

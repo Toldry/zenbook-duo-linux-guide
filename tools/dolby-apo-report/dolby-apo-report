@@ -34,22 +34,39 @@ work_dir=$(mktemp -d)
 trap 'rm -r "$work_dir"' EXIT
 
 # export_key HIVE PREFIX KEY: the key and its subkeys, in regedit format.
+# PERL_UNICODE=SO prints decoded strings as UTF-8 instead of warning
+# "Wide character" and emitting mixed bytes.
 export_key() {
-    hivexregedit --export --unsafe-printable-strings --prefix "$2" "$1" "$3"
+    PERL_UNICODE=SO hivexregedit --export --unsafe-printable-strings \
+        --prefix "$2" "$1" "$3"
 }
 
 # Rewrites REG_MULTI_SZ values (hex(7), UTF-16LE) as readable text,
 # because the composite effect lists on an endpoint are stored that way.
 decode_multi_strings() {
-    perl -MEncode -pe '
+    perl -CSD -MEncode -pe '
         if (/^(".*")=hex\(7\):(.*)$/) {
             my ($name, $hex) = ($1, $2);
             $hex =~ s/,//g;
-            my $text = decode("UTF-16LE", pack("H*", $hex));
+            my $text = decode("UTF-16LE", pack("H*", $hex), Encode::FB_DEFAULT);
             $text =~ s/\0+$//;
             $text =~ s/\0/ | /g;
             $_ = "$name=multi:\"$text\"\n";
         }'
+}
+
+# Prints a text file as UTF-8. Many .inf files are UTF-16 and plain grep
+# finds nothing in those, but some are ASCII, and iconv would garble them.
+to_utf8() {
+    local bom
+    bom=$(head -c 2 "$1" | od -An -tx1 | tr -d ' \n')
+    if [[ $bom == fffe ]]; then
+        iconv -f UTF-16 -t UTF-8 "$1"
+    elif [[ $bom == ??00 ]]; then
+        iconv -f UTF-16LE -t UTF-8 "$1"
+    else
+        cat "$1"
+    fi | tr -d '\r'
 }
 
 section() { printf '\n######## %s\n' "$*"; }
@@ -60,40 +77,44 @@ section "1. Audio endpoints: names and attached effects (FxProperties)"
 export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' \
     '\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render' 2>&1 |
     decode_multi_strings > "$work_dir/render.reg"
-# Binary blobs (icons, wave formats) are left out.
-grep -v -E '=hex\(' "$work_dir/render.reg" | grep -v '^$'
+# Binary blobs (icons, wave formats) are left out. -a: a few registry
+# strings are not valid text, and grep would otherwise stop at the first.
+grep -a -v -E '=hex\(' "$work_dir/render.reg" | grep -a -v '^$'
 
 section "2. Every APO registered with the audio engine"
 export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' \
     '\Classes\AudioEngine\AudioProcessingObjects' > "$work_dir/apos.reg" 2>&1
-grep -v '^$' "$work_dir/apos.reg"
+grep -a -v '^$' "$work_dir/apos.reg"
 
-section "3. The DLL behind each GUID in sections 1 and 2"
+export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' '\Dolby' \
+    > "$work_dir/dolby.reg" 2>&1
+
+section "3. The DLL behind each GUID in sections 1, 2 and 4"
 {
-    sed -n 's/^"[^"]*"=//p' "$work_dir/render.reg"
-    grep '^\[' "$work_dir/apos.reg"
-} | grep -o -E "$guid_pattern" | sort -fu > "$work_dir/guids.txt"
+    sed -n 's/^"[^"]*"=//p' "$work_dir/render.reg" "$work_dir/dolby.reg"
+    grep -a '^\[' "$work_dir/apos.reg"
+} | grep -a -o -E "$guid_pattern" | tr '[:lower:]' '[:upper:]' |
+    sort -u > "$work_dir/guids.txt"
 while read -r guid; do
     class=$(export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' \
         "\\Classes\\CLSID\\$guid" 2> /dev/null)
     if [[ $class == *InprocServer32* ]]; then
-        grep -v '^$' <<< "$class"
+        grep -a -v -E '^$|^Windows Registry Editor' <<< "$class"
     fi
 done < "$work_dir/guids.txt"
 
 section "4. Dolby's registry keys"
-export_key "$software_hive" 'HKEY_LOCAL_MACHINE\SOFTWARE' '\Dolby' 2>&1 |
-    grep -v '^$' | head -300
+grep -a -v '^$' "$work_dir/dolby.reg" | head -300
 
 section "5. Sound drivers bound in Windows (MEDIA device class)"
 export_key "$system_hive" 'HKEY_LOCAL_MACHINE\SYSTEM' \
     '\ControlSet001\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}' \
     2>&1 | decode_multi_strings > "$work_dir/media.reg"
-grep -E '^\[|"(DriverDesc|InfPath|InfSection|MatchingDeviceId|DriverVersion|ProviderName)"=' \
+grep -a -E '^\[|"(DriverDesc|InfPath|InfSection|MatchingDeviceId|DriverVersion|ProviderName)"=' \
     "$work_dir/media.reg"
 echo "-- Effect settings the driver .inf files wrote for each endpoint (EP and FX keys)"
 awk '/^\[/ { on = ($0 ~ /\\(EP|FX)\\/) } on && !/=hex\(/' "$work_dir/media.reg" |
-    grep -v '^$' | head -200
+    grep -a -v '^$' | head -200
 
 section "6. Registry lines in the Dolby and ASUS/Realtek .inf files"
 for inf in "$driver_store"/dax3_swc_aposvc.inf_*/*.inf \
@@ -101,9 +122,7 @@ for inf in "$driver_store"/dax3_swc_aposvc.inf_*/*.inf \
            "$driver_store"/dax3_ext_*/*.inf; do
     [[ -e $inf ]] || continue
     echo "== $inf"
-    # Many .inf files are UTF-16; plain grep finds nothing in those.
-    { iconv -f UTF-16 -t UTF-8 "$inf" 2> /dev/null || cat "$inf"; } |
-        tr -d '\r' > "$work_dir/inf.txt"
+    to_utf8 "$inf" > "$work_dir/inf.txt"
     grep -n -i -E '^\s*HK(CR|LM|R)\s*,|ApoPreset|FX|AddReg|CLSID' \
         "$work_dir/inf.txt" | head -150
     echo "-- [Strings] entries with GUIDs or Dolby/APO/FX names"
@@ -115,7 +134,7 @@ section "7. Copies of the UX8406MA tuning XML (subsystem 1C43)"
 for xml in "$driver_store"/dax3_ext_*/DEV_0294_SUBSYS_10431C43_*.xml; do
     [[ -e $xml ]] || continue
     echo "== $xml"
-    grep -o -m 3 -E 'tuning_version="[^"]*"|<tuning_version>[^<]*' "$xml"
+    grep -a -o -m 3 -i -E 'tuning[_-]version[^>]{0,40}' "$xml"
     sha256sum "$xml"
 done
 
@@ -124,6 +143,7 @@ ls -laR "$windows_root/ProgramData/Dolby" 2>&1 | head -60
 for settings in "$windows_root"/ProgramData/Dolby/DAX3/*.xml; do
     [[ -e $settings ]] || continue
     echo "== $settings"
-    grep -o -E '<[a-z_-]*(profile|enable|ieq|amount|preset|selected|endpoint)[a-z_-]*[^>]*>[^<]{0,120}' \
-        "$settings" | head -100
+    # Runtime.xml is small (well under 1 KB here), so print all of it.
+    to_utf8 "$settings" | head -c 20000
+    echo
 done
