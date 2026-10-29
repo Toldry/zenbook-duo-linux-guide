@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Turns a recorded Windows Dolby curve into an impulse response for
+EasyEffects' Convolver, so Linux applies the tone shape Windows was
+measured to apply, instead of the one rebuilt from the tuning XML.
+
+Input: the spectrum_pink_<label>_{L,R}.npz files analyze.py writes from
+the DOLBY-CAPTURE.md recordings. Each channel's curve (recording against
+test sound) is smoothed to 1/6 octave, scaled so its loudest point in
+50 Hz-18 kHz is 0 dB (the filter only ever cuts, so it cannot clip), and
+made into a minimum-phase FIR, which adds no latency.
+
+Usage: dax-curve-to-fir [CAPTURE_DIR] [--label music] [--out FILE.wav]
+"""
+import argparse
+import struct
+import sys
+from pathlib import Path
+
+import numpy as np
+
+SAMPLE_RATE = 48000
+FFT_SIZE = 65536          # frequency grid for the design
+FIR_TAPS = 8192           # 171 ms; enough for 1/6-octave detail at 50 Hz
+IN_BAND_HZ = (50.0, 18000.0)
+SMOOTHING_OCTAVES = 1 / 6
+
+
+def load_curve(path):
+    data = np.load(path)
+    gain = data["eq_gain_db_raw"] if "eq_gain_db_raw" in data \
+        else data["eq_gain_db"]
+    return data["f"], gain
+
+
+def smooth_octave(freqs, gain_db, width_octaves):
+    """Power average over width_octaves around every frequency."""
+    power = 10 ** (gain_db / 10)
+    cumulative = np.concatenate([[0.0], np.cumsum(power)])
+    half = 2 ** (width_octaves / 2)
+    low = np.searchsorted(freqs, freqs / half, side="left")
+    high = np.searchsorted(freqs, freqs * half, side="right")
+    high = np.maximum(high, low + 1)
+    return 10 * np.log10((cumulative[high] - cumulative[low]) / (high - low))
+
+
+def target_on_grid(freqs, gain_db):
+    """The design curve on the FFT grid, peak at 0 dB in band."""
+    smoothed = smooth_octave(freqs, gain_db, SMOOTHING_OCTAVES)
+    low, high = IN_BAND_HZ
+    band = (freqs >= low) & (freqs <= high)
+    smoothed = smoothed - smoothed[band].max()
+    grid = np.fft.rfftfreq(FFT_SIZE, 1 / SAMPLE_RATE)
+    # Outside the measured band, hold the value at the band edge.
+    edge_low = np.interp(low, freqs, smoothed)
+    edge_high = np.interp(high, freqs, smoothed)
+    design = np.interp(grid, freqs, smoothed)
+    design[grid < low] = edge_low
+    design[grid > high] = edge_high
+    return grid, design
+
+
+def minimum_phase_fir(magnitude_db):
+    """Minimum-phase FIR from a magnitude on an rfft grid (cepstral)."""
+    log_magnitude = np.log(10 ** (magnitude_db / 20))
+    cepstrum = np.fft.irfft(log_magnitude, FFT_SIZE)
+    folded = np.zeros(FFT_SIZE)
+    folded[0] = cepstrum[0]
+    folded[1:FFT_SIZE // 2] = 2 * cepstrum[1:FFT_SIZE // 2]
+    folded[FFT_SIZE // 2] = cepstrum[FFT_SIZE // 2]
+    spectrum = np.exp(np.fft.rfft(folded))
+    impulse = np.fft.irfft(spectrum, FFT_SIZE)[:FIR_TAPS]
+    fade = FIR_TAPS // 8
+    impulse[-fade:] *= 0.5 * (1 + np.cos(np.linspace(0, np.pi, fade)))
+    return impulse
+
+
+def write_float_wav(path, channels):
+    """32-bit float WAV, which EasyEffects' Convolver reads."""
+    frames = np.stack(channels, axis=1).astype("<f4")
+    data = frames.tobytes()
+    channel_count = frames.shape[1]
+    block_align = 4 * channel_count
+    header = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVE"
+    header += b"fmt " + struct.pack("<IHHIIHH", 16, 3, channel_count,
+                                    SAMPLE_RATE, SAMPLE_RATE * block_align,
+                                    block_align, 32)
+    header += b"data" + struct.pack("<I", len(data))
+    path.write_bytes(header + data)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("capture_dir", nargs="?",
+                        default=str(Path.home() / "dax-measure/captures"))
+    parser.add_argument("--label", default="music",
+                        help="the Dolby-on round to copy (default: music)")
+    parser.add_argument("--out", help="output WAV (default: "
+                        "windows-dolby-<label>.wav next to the captures)")
+    args = parser.parse_args()
+    capture_dir = Path(args.capture_dir).expanduser()
+    out_path = Path(args.out).expanduser() if args.out else \
+        capture_dir.parent / f"windows-dolby-{args.label}.wav"
+
+    impulses = []
+    for channel in ("L", "R"):
+        path = capture_dir / f"spectrum_pink_{args.label}_{channel}.npz"
+        if not path.is_file():
+            sys.exit(f"Missing {path}. Run analyze.py on the captures first.")
+        freqs, gain_db = load_curve(path)
+        grid, design_db = target_on_grid(freqs, gain_db)
+        impulse = minimum_phase_fir(design_db)
+        impulses.append(impulse)
+
+        achieved = 20 * np.log10(np.abs(np.fft.rfft(impulse, FFT_SIZE))
+                                 + 1e-12)
+        low, high = IN_BAND_HZ
+        band = (grid >= low) & (grid <= high)
+        error = np.abs(achieved[band] - design_db[band])
+        print(f"channel {channel}: curve spans "
+              f"{design_db[band].min():.1f}..0 dB; FIR matches it within "
+              f"{np.percentile(error, 95):.2f} dB (95th percentile), "
+              f"{error.max():.2f} dB worst")
+        for centre in (100, 250, 1000, 3000, 9000, 15000):
+            print(f"    {centre:>5} Hz  {np.interp(centre, grid, design_db):+6.1f} dB")
+
+    write_float_wav(out_path, impulses)
+    print(f"wrote {out_path} ({FIR_TAPS} taps, {SAMPLE_RATE} Hz, stereo)")
+
+
+if __name__ == "__main__":
+    main()

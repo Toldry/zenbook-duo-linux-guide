@@ -236,7 +236,19 @@ python3 ~/workspace/zenbook-duo-linux-guide/tools/dax-capture-summary/dax-captur
 
 Adjust `~/workspace/zenbook-duo-linux-guide` if you cloned this guide elsewhere. The *Dolby* column is Dolby's own share of the sound. With 2.4b done, *off-raw* is what Windows still does with Dolby switched off.
 
-### 3.3 What to do with the results
+### 3.3 Use the Windows curve on Linux
+
+[`dax-curve-to-fir`](tools/dax-curve-to-fir/) turns the recorded Dolby-on curve into an impulse response for EasyEffects' **Convolver**. Linux then applies the tone shape Windows was measured to apply, in place of the one the converter rebuilt from the XML:
+
+```bash
+python3 ~/workspace/zenbook-duo-linux-guide/tools/dax-curve-to-fir/dax-curve-to-fir
+mkdir -p ~/.local/share/easyeffects/irs
+cp ~/dax-measure/windows-dolby-music.wav ~/.local/share/easyeffects/irs/
+```
+
+In EasyEffects, load your preset, save it under a new name (so you can switch back), open **Convolver**, and pick `windows-dolby-music` as the impulse. The filter only cuts, by up to about 20 dB in the midrange, so the sound gets much quieter: turn the volume up, or raise the convolver's output gain until the limiter after it just starts to act. Windows makes up the same loss with its volume leveler (3.2b).
+
+### 3.4 What to do with the results
 
 - **Share them** in this project's conversation, or [open an issue](https://github.com/Toldry/zenbook-duo-linux-guide/issues): `analysis-summary.txt`, `capture-summary.txt` and the `compare_*.png` pictures are enough to start. The tone-shape, width and leveler numbers say which part of preset B to change.
 - **Help the converter:** its author asked for exactly these recordings for ASUS laptops. Zip them and attach them to a [device report](https://github.com/antoinecellerier/speaker-tuning-to-easyeffects/issues/new?template=device-report.yml), with the XML:

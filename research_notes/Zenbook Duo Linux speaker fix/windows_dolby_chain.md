@@ -1109,3 +1109,35 @@ flowchart LR
   first profile in the file) therefore copies a tuning this laptop does not
   play. Confidence: high that "music" was selected at the last Windows
   shutdown; this file is what Dolby Access updates when settings change.
+
+## Addendum, 2026-10-29: loopback measurements on the user's Duo
+
+Recorded with the converter's `tools/measure_dax/` (Music profile, IEQ
+Balanced) and summarised with
+[`tools/dax-capture-summary`](../../tools/dax-capture-summary/).
+
+- **Dolby off and all enhancements off give the same output**, to 0.02 dB in
+  every band. But that output is not the test sound. It has a fixed tone shape
+  that does not change with input level: relative to 1 kHz, −13.7 dB at 47 Hz,
+  +7.9 at 234 Hz, +10.4 at 469 Hz, +3.5 at 2–4.7 kHz, +11.7 at 7–9 kHz. On
+  top of that comes broadband gain of −8.7 dB up to −30 dBFS input, falling to
+  −19.2 dB at −14 dBFS, so output is capped near −33 dBFS. So a processing
+  stage runs before the loopback tap that neither switch bypasses. It is
+  probably Dolby's endpoint stage (VLLDP: speaker correction plus regulator),
+  given its shape and limiting (about 60% confident). Other candidates: the
+  enhancements switch did not apply, or a Realtek stage.
+- **The Music profile**, relative to 1 kHz at −18 dBFS input: −43 dB at 47 Hz,
+  +11.6 at 141 Hz, +17.7 at 234 Hz, +13.1 at 328 Hz, about −1 at 650–850 Hz,
+  +8.9 at 2.25 kHz, +18.0 at 7.1 kHz, +21.7 at 9 kHz, +8.8 at 13.9 kHz. The
+  shape moves by at most about 2 dB between −60 and −14 dBFS input, except
+  below 150 Hz and above 13 kHz.
+- **Leveler.** Broadband gain against the test sound: +25.0 dB at −60 dBFS
+  input, +15.4 at −42, +4.5 at −30, −6.9 at −18, −11.0 at −14. Output sits
+  near −25 dBFS (100 Hz–10 kHz power) for any input from −30 dBFS up.
+- **Stereo.** Side/mid +6.3 dB on correlated pink noise, −0.3 dB on
+  decorrelated noise. Dolby off: 0.0 dB.
+- **Against the converter's curve** for the same profile and IEQ, Windows has
+  roughly 12–17 dB more at 140–470 Hz and 12–16 dB more at 6–14 kHz, relative
+  to 1 kHz. That is far beyond the converter's own ~1 dB acceptance band.
+  [`tools/dax-curve-to-fir`](../../tools/dax-curve-to-fir/) builds an
+  EasyEffects impulse from the measured curve instead.
