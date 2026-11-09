@@ -8,19 +8,22 @@ both the release and the press are dropped, so the drag stays one continuous
 press.
 
 A press counts as a drag once the pointer has moved DRAG_DISTANCE counts or
-the button has been held LONG_HOLD_MS. Quick clicks (short and still) are
-passed on at once, so they are not delayed.
+the button has been held LONG_HOLD_MS. The release of a quick click (short
+and still) is held back for CLICK_HOLD_MS instead, which is 0 by default:
+clicks are passed on at once, so they are not delayed.
 
-The evtest capture from the MX Vertical (2026-10-27) showed spurious
-release->press gaps of 46-52 ms, each in the middle of a drag with the
-pointer moving, so the default window is 70 ms.
+Measured on the MX Vertical with evtest. 2026-10-27: spurious
+release->press gaps of 46-52 ms, each in the middle of a drag. 2026-11-09:
+gaps of 45-54 ms, but in one drag also 84, 112 and 120 ms, and one 53 ms gap
+67 ms into a still press. So the drag window is now 150 ms.
 
 Needs: sudo apt install python3-evdev
 Usage: sudo mouse-debounce ["device name substring"] [hold_ms]
 The defaults come from $MOUSE_DEBOUNCE_DEVICE and $MOUSE_DEBOUNCE_HOLD_MS,
-or else "MX Vertical" and 70 ms. $MOUSE_DEBOUNCE_DRAG_DISTANCE (default 10
+or else "MX Vertical" and 150 ms. $MOUSE_DEBOUNCE_DRAG_DISTANCE (default 10
 counts) and $MOUSE_DEBOUNCE_LONG_HOLD_MS (default 300) decide what is a
-drag. See MOUSE-CHATTER.md.
+drag; $MOUSE_DEBOUNCE_CLICK_HOLD_MS (default 0) is the window for clicks.
+See MOUSE-CHATTER.md.
 
 Waits for the mouse to appear and re-attaches after Bluetooth reconnects.
 Written against the python-evdev API; not yet run on real hardware.
@@ -34,7 +37,8 @@ import evdev
 from evdev import ecodes
 
 DEFAULT_DEVICE_NAME = "MX Vertical"
-DEFAULT_HOLD_MS = 70
+DEFAULT_HOLD_MS = 150
+DEFAULT_CLICK_HOLD_MS = 0
 DEFAULT_DRAG_DISTANCE = 10
 DEFAULT_LONG_HOLD_MS = 300
 VIRTUAL_DEVICE_NAME = "debounced-mouse"
@@ -111,11 +115,15 @@ def forward_with_debounce(physical, settings):
                     held_buttons[event.code] = HeldButton(now)
                 elif is_watched_button and event.value == 0:
                     held = held_buttons.get(event.code)
-                    if held is not None and is_drag(held, now):
-                        held.release_deadline = (
-                            now + settings["hold_seconds"])
-                        continue
-                    held_buttons.pop(event.code, None)  # quick click
+                    if held is not None:
+                        if is_drag(held, now):
+                            hold = settings["hold_seconds"]
+                        else:
+                            hold = settings["click_hold_seconds"]
+                        if hold > 0:
+                            held.release_deadline = now + hold
+                            continue
+                    held_buttons.pop(event.code, None)  # pass it on now
                 virtual.write_event(event)
     finally:
         for button in held_buttons:
@@ -143,6 +151,8 @@ def main():
                                             DEFAULT_DRAG_DISTANCE)),
         "long_hold_seconds": int(os.environ.get(
             "MOUSE_DEBOUNCE_LONG_HOLD_MS", DEFAULT_LONG_HOLD_MS)) / 1000,
+        "click_hold_seconds": int(os.environ.get(
+            "MOUSE_DEBOUNCE_CLICK_HOLD_MS", DEFAULT_CLICK_HOLD_MS)) / 1000,
     }
     while True:
         physical = find_device(name_substring)

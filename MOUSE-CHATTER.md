@@ -53,6 +53,11 @@ later, while the pointer kept moving and the finger stayed down. The
 Bluetooth connection did not drop at the time (nothing in the kernel or
 Bluetooth logs).
 
+Two weeks later, on 2026-11-09, the switch had worn further. Most gaps were
+still 45 to 54 ms, but one drag had gaps of **84, 112 and 120 ms**, and one
+press bounced 67 ms after it started, before the pointer moved. That is why
+the window is now 150 ms.
+
 Ubuntu's input library, libinput, already filters switch bounce, but only
 gaps of a few milliseconds, and you can't change that window. A 50 ms
 gap gets through.
@@ -106,13 +111,13 @@ journalctl -u mouse-debounce -n 10
 ```
 
 You should see `debouncing Logitech MX Vertical Advanced Ergonomic Mouse
-(/dev/input/event26), 70 ms`.
+(/dev/input/event26), 150 ms`.
 
 ---
 
 ## Settings
 
-The defaults are the mouse name `MX Vertical` and a 70 ms window. To change
+The defaults are the mouse name `MX Vertical` and a 150 ms window. To change
 them:
 
 ```bash
@@ -135,6 +140,11 @@ Two more settings decide what counts as a drag:
 `MOUSE_DEBOUNCE_LONG_HOLD_MS` (default `300`). If quick clicks feel slow,
 raise the distance. If short drags still break, lower it.
 
+`MOUSE_DEBOUNCE_CLICK_HOLD_MS` (default `0`, off) also filters quick, still
+presses. Set it to `60` if a drag sometimes starts with a stray click (in a
+window's title bar that double-click maximises the window). The cost is that
+every click's release reaches apps that much later.
+
 ---
 
 ## How it works
@@ -142,7 +152,7 @@ raise the distance. If short drags still break, lower it.
 The program takes the mouse for itself, so GNOME no longer sees it
 directly, and passes every event on through a virtual mouse called
 `debounced-mouse`. It changes one thing: when the left button is released
-**during a drag**, it waits 70 ms before passing the release on. If the
+**during a drag**, it waits 150 ms before passing the release on. If the
 button is pressed again within that time, it throws away both the release
 and the new press, so to GNOME the button never let go.
 
@@ -159,10 +169,11 @@ waits and takes it over again when it comes back.
 
 ## Limitations
 
-- At the end of a drag, the release reaches apps 70 ms later. Clicks are not
-  delayed.
+- At the end of a drag, the release reaches apps 150 ms later. Clicks are
+  not delayed.
 - A short, still press that chatters (under 300 ms, no movement) is not
-  filtered, because it can't be told apart from a quick double-click.
+  filtered by default, because without a delay it can't be told apart from a
+  quick double-click. `MOUSE_DEBOUNCE_CLICK_HOLD_MS` turns that on.
 - Only the left button is filtered.
 - If the switch gets worse and its gaps grow beyond the window, drags break
   again. Raise the window, or replace the switch.

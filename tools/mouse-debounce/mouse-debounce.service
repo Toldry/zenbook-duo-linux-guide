@@ -5,9 +5,10 @@ Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/MOUSE-
 [Service]
 # Change these with: sudo systemctl edit mouse-debounce
 Environment=MOUSE_DEBOUNCE_DEVICE="MX Vertical"
-Environment=MOUSE_DEBOUNCE_HOLD_MS=70
+Environment=MOUSE_DEBOUNCE_HOLD_MS=150
 Environment=MOUSE_DEBOUNCE_DRAG_DISTANCE=10
 Environment=MOUSE_DEBOUNCE_LONG_HOLD_MS=300
+Environment=MOUSE_DEBOUNCE_CLICK_HOLD_MS=0
 # The virtual mouse needs uinput; it is usually loaded on demand anyway.
 ExecStartPre=-/usr/sbin/modprobe uinput
 ExecStart=/usr/local/bin/mouse-debounce
