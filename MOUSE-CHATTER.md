@@ -145,6 +145,12 @@ presses. Set it to `60` if a drag sometimes starts with a stray click (in a
 window's title bar that double-click maximises the window). The cost is that
 every click's release reaches apps that much later.
 
+To see what the filter decides, set `MOUSE_DEBOUNCE_LOG=1` the same way,
+reproduce a broken drag, and read the log with
+`journalctl -u mouse-debounce --since "5 min ago"`. Each release says how
+long the button was held, how far it moved, whether that counted as a
+drag, and whether a following press was hidden as chatter.
+
 ---
 
 ## How it works

@@ -23,6 +23,7 @@ The defaults come from $MOUSE_DEBOUNCE_DEVICE and $MOUSE_DEBOUNCE_HOLD_MS,
 or else "MX Vertical" and 150 ms. $MOUSE_DEBOUNCE_DRAG_DISTANCE (default 10
 counts) and $MOUSE_DEBOUNCE_LONG_HOLD_MS (default 300) decide what is a
 drag; $MOUSE_DEBOUNCE_CLICK_HOLD_MS (default 0) is the window for clicks.
+$MOUSE_DEBOUNCE_LOG=1 logs every press and release decision.
 See MOUSE-CHATTER.md.
 
 Waits for the mouse to appear and re-attaches after Bluetooth reconnects.
@@ -65,6 +66,12 @@ class HeldButton:
         self.pressed_at = now
         self.distance_moved = 0
         self.release_deadline = None  # set while a release is held back
+        self.released_at = None
+
+
+def log(settings, message):
+    if settings["log"]:
+        print(message, flush=True)
 
 
 def forward_with_debounce(physical, settings):
@@ -80,6 +87,7 @@ def forward_with_debounce(physical, settings):
         for button, held in list(held_buttons.items()):
             deadline = held.release_deadline
             if deadline is not None and now >= deadline:
+                log(settings, "release sent: no press within the window")
                 virtual.write(ecodes.EV_KEY, button, 0)
                 virtual.syn()
                 del held_buttons[button]
@@ -111,17 +119,28 @@ def forward_with_debounce(physical, settings):
                     held = held_buttons.get(event.code)
                     if held is not None and held.release_deadline is not None:
                         held.release_deadline = None  # chatter: drop both
+                        gap_ms = (now - held.released_at) * 1000
+                        log(settings,
+                            f"chatter hidden: up for {gap_ms:.0f} ms")
                         continue
+                    log(settings, "press")
                     held_buttons[event.code] = HeldButton(now)
                 elif is_watched_button and event.value == 0:
                     held = held_buttons.get(event.code)
                     if held is not None:
-                        if is_drag(held, now):
+                        drag = is_drag(held, now)
+                        if drag:
                             hold = settings["hold_seconds"]
                         else:
                             hold = settings["click_hold_seconds"]
+                        held_ms = (now - held.pressed_at) * 1000
+                        log(settings, f"release after {held_ms:.0f} ms, "
+                            f"moved {held.distance_moved}: "
+                            f"{'drag' if drag else 'click'}, "
+                            f"holding it {hold * 1000:.0f} ms")
                         if hold > 0:
                             held.release_deadline = now + hold
+                            held.released_at = now
                             continue
                     held_buttons.pop(event.code, None)  # pass it on now
                 virtual.write_event(event)
@@ -153,6 +172,7 @@ def main():
             "MOUSE_DEBOUNCE_LONG_HOLD_MS", DEFAULT_LONG_HOLD_MS)) / 1000,
         "click_hold_seconds": int(os.environ.get(
             "MOUSE_DEBOUNCE_CLICK_HOLD_MS", DEFAULT_CLICK_HOLD_MS)) / 1000,
+        "log": os.environ.get("MOUSE_DEBOUNCE_LOG", "0") == "1",
     }
     while True:
         physical = find_device(name_substring)
