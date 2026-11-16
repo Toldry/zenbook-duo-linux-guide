@@ -150,5 +150,47 @@ class DebouncerTest(unittest.TestCase):
         self.assertIsNone(self.debouncer.next_deadline())
 
 
+class FakePhysicalMouse:
+    """Answers active_keys() from a script; records grab and ungrab."""
+
+    def __init__(self, keys_down_per_call):
+        self.keys_down_per_call = list(keys_down_per_call)
+        self.calls = []
+        read_end, self.write_end = os.pipe()
+        self.fd = read_end
+
+    def active_keys(self):
+        if len(self.keys_down_per_call) > 1:
+            return self.keys_down_per_call.pop(0)
+        return self.keys_down_per_call[0]
+
+    def read(self):
+        return []
+
+    def grab(self):
+        self.calls.append("grab")
+
+    def ungrab(self):
+        self.calls.append("ungrab")
+
+
+class GrabTest(unittest.TestCase):
+    def test_grabs_at_once_when_no_button_is_down(self):
+        physical = FakePhysicalMouse([[]])
+        mouse_debounce.grab_when_buttons_are_up(physical)
+        self.assertEqual(physical.calls, ["grab"])
+
+    def test_waits_for_a_held_button_before_grabbing(self):
+        physical = FakePhysicalMouse([[LEFT], [LEFT], [], []])
+        mouse_debounce.grab_when_buttons_are_up(physical)
+        self.assertEqual(physical.calls, ["grab"])
+
+    def test_lets_go_if_pressed_while_grabbing(self):
+        # up before the grab, down right after it, then up again
+        physical = FakePhysicalMouse([[], [LEFT], [LEFT], [], []])
+        mouse_debounce.grab_when_buttons_are_up(physical)
+        self.assertEqual(physical.calls, ["grab", "ungrab", "grab"])
+
+
 if __name__ == "__main__":
     unittest.main()

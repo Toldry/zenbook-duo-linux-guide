@@ -21,8 +21,10 @@ Because it stands between the mouse and GNOME, a wrong button state here
 would break clicking for the whole session. So, once a second when the
 mouse is idle, and after the kernel reports lost events (SYN_DROPPED), the
 buttons the virtual mouse holds down are compared with the physical mouse's
-real state and corrected, and each correction is logged. Added 2026-11-16
-after left click stopped working until a reboot.
+real state and corrected, and each correction is logged. And it never
+takes the mouse from GNOME while a button is down (see
+grab_when_buttons_are_up). Both added 2026-11-16, after left click stopped
+working until a reboot.
 
 Needs: sudo apt install python3-evdev
 Usage: sudo mouse-debounce ["device name substring"] [hold_ms]
@@ -238,11 +240,44 @@ class Debouncer:
         self.held_buttons.clear()
 
 
+def grab_when_buttons_are_up(physical):
+    """Takes the mouse for this program, but never while a button is down.
+
+    GNOME opens the mouse as soon as it appears. If it sees a press and the
+    grab then hides the release, libinput keeps that button down on the raw
+    mouse for good. It counts presses per seat and only reports a press
+    when the count goes from 0 to 1, so every click from the virtual mouse
+    is then swallowed: left click is dead until the raw mouse disappears.
+    The 2026-11-16 log fits this: the mouse reconnected after a resume at
+    20:13:47, probably woken by a click, the filter grabbed it a second
+    later, and left click stayed dead until a reboot 3 minutes later.
+    (libinput's per-seat count is from memory of src/libinput.c,
+    pointer_notify_button; not re-checked against the source.)
+    """
+    said_waiting = False
+    while True:
+        while physical.active_keys():
+            if not said_waiting:
+                log("a button is down; taking the mouse once it is up")
+                said_waiting = True
+            notify_systemd("WATCHDOG=1")
+            readable, _, _ = select.select([physical.fd], [], [], 0.05)
+            if readable:
+                try:
+                    list(physical.read())  # GNOME gets these directly
+                except BlockingIOError:
+                    pass
+        physical.grab()  # stop the compositor from seeing the raw device
+        if not physical.active_keys():
+            return
+        physical.ungrab()  # pressed in between: let GNOME see the release
+
+
 def forward_with_debounce(physical, settings):
     virtual = evdev.UInput.from_device(physical, name=VIRTUAL_DEVICE_NAME)
     debouncer = Debouncer(virtual, settings)
     try:
-        physical.grab()  # stop the compositor from seeing the raw device
+        grab_when_buttons_are_up(physical)
         debouncer.resync(physical.active_keys(), time.monotonic())
         while True:
             notify_systemd("WATCHDOG=1")

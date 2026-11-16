@@ -170,7 +170,8 @@ feel exactly as they did before. In the MX Vertical capture, every spurious
 release happened while the pointer was moving.
 
 If the mouse disconnects (sleep, out of range, switched off), the program
-waits and takes it over again when it comes back.
+waits and takes it over again when it comes back, once no button is down.
+Until then, GNOME gets the mouse directly.
 
 Because every click goes through it, a wrong button state in the filter
 would break clicking everywhere. So it checks itself: once a second while
@@ -198,25 +199,37 @@ systemd restarts it.
 ## If clicking stops working
 
 On 2026-11-16 left click stopped working until a reboot, a week after the
-filter was installed. The cause isn't known yet, but the filter is the
-first suspect, so it now repairs a stuck button by itself (see
-[How it works](#how-it-works)). If it happens again, you don't need to
-reboot. Open a terminal with `Ctrl+Alt+T` and restart the filter:
+filter was installed. The log showed the mouse reconnecting after the
+laptop woke from sleep (probably woken by a click), the filter taking it
+over a second later, and the reboot 3 minutes after that.
 
-```bash
-sudo systemctl restart mouse-debounce
-```
+The likely cause: GNOME opens the mouse the moment it appears, so it saw
+the press. The filter then took the mouse away before the release, so as
+far as GNOME knew, the left button on the real mouse stayed down. GNOME's
+input library only reports a press when no other left button is down, so
+every click from the filter's virtual mouse was swallowed. (I'm about 75%
+sure of this; it fits the log, but wasn't reproduced.)
 
-If clicking still doesn't work, stop the filter. The mouse then goes
-straight to GNOME again, chatter included:
+The filter now waits until no button is down before it takes the mouse
+over. It also checks its own button state every second (see
+[How it works](#how-it-works)).
+
+If clicking stops working anyway, you don't need to reboot. The quickest
+fix is to **switch the mouse off and on** with the switch underneath it:
+when the mouse disappears, GNOME forgets every button it thought was down.
+Or open a terminal with `Ctrl+Alt+T`, stop the filter, click once, and
+start it again:
 
 ```bash
 sudo systemctl stop mouse-debounce
 ```
 
-If even that doesn't bring the click back, the filter wasn't the cause;
-log out and back in instead. Either way, save the log before you reboot,
-so the cause can be found:
+```bash
+sudo systemctl start mouse-debounce
+```
+
+If neither brings the click back, the filter wasn't the cause; log out and
+back in instead. Either way, save the log before you reboot:
 
 ```bash
 journalctl -b -u mouse-debounce --no-pager > ~/mouse-debounce-incident.txt
