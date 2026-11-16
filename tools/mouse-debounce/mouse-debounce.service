@@ -3,6 +3,11 @@ Description=Hide mouse button chatter that breaks drags into clicks
 Documentation=https://github.com/Toldry/zenbook-duo-linux-guide/blob/main/MOUSE-CHATTER.md
 
 [Service]
+# The filter says READY and pings the watchdog; if it hangs, systemd
+# restarts it, which also gives the raw mouse back while it starts again.
+Type=notify
+NotifyAccess=main
+WatchdogSec=10
 # Change these with: sudo systemctl edit mouse-debounce
 Environment=MOUSE_DEBOUNCE_DEVICE="MX Vertical"
 Environment=MOUSE_DEBOUNCE_HOLD_MS=150
@@ -12,8 +17,8 @@ Environment=MOUSE_DEBOUNCE_CLICK_HOLD_MS=0
 # The virtual mouse needs uinput; it is usually loaded on demand anyway.
 ExecStartPre=-/usr/sbin/modprobe uinput
 ExecStart=/usr/local/bin/mouse-debounce
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target

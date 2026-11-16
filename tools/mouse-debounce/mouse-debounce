@@ -17,6 +17,13 @@ release->press gaps of 46-52 ms, each in the middle of a drag. 2026-11-09:
 gaps of 45-54 ms, but in one drag also 84, 112 and 120 ms, and one 53 ms gap
 67 ms into a still press. So the drag window is now 150 ms.
 
+Because it stands between the mouse and GNOME, a wrong button state here
+would break clicking for the whole session. So, once a second when the
+mouse is idle, and after the kernel reports lost events (SYN_DROPPED), the
+buttons the virtual mouse holds down are compared with the physical mouse's
+real state and corrected, and each correction is logged. Added 2026-11-16
+after left click stopped working until a reboot.
+
 Needs: sudo apt install python3-evdev
 Usage: sudo mouse-debounce ["device name substring"] [hold_ms]
 The defaults come from $MOUSE_DEBOUNCE_DEVICE and $MOUSE_DEBOUNCE_HOLD_MS,
@@ -27,10 +34,12 @@ $MOUSE_DEBOUNCE_LOG=1 logs every press and release decision.
 See MOUSE-CHATTER.md.
 
 Waits for the mouse to appear and re-attaches after Bluetooth reconnects.
-Written against the python-evdev API; not yet run on real hardware.
+Pings the systemd watchdog, so a hung filter is restarted.
 """
 import os
 import select
+import signal
+import socket
 import sys
 import time
 
@@ -45,11 +54,33 @@ DEFAULT_LONG_HOLD_MS = 300
 VIRTUAL_DEVICE_NAME = "debounced-mouse"
 WATCHED_BUTTONS = {ecodes.BTN_LEFT}
 RESCAN_INTERVAL_SECONDS = 2
+IDLE_CHECK_SECONDS = 1
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def notify_systemd(message):
+    """sd_notify(3) without libsystemd: READY=1 and WATCHDOG=1."""
+    address = os.environ.get("NOTIFY_SOCKET")
+    if not address:
+        return
+    if address.startswith("@"):
+        address = "\0" + address[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            sock.sendto(message.encode(), address)
+    except OSError:
+        pass
 
 
 def find_device(name_substring):
     for path in evdev.list_devices():
-        device = evdev.InputDevice(path)
+        try:
+            device = evdev.InputDevice(path)
+        except OSError:
+            continue  # vanished between listing and opening
         is_match = (name_substring in device.name
                     and device.name != VIRTUAL_DEVICE_NAME
                     and ecodes.EV_REL in device.capabilities())
@@ -69,90 +100,181 @@ class HeldButton:
         self.released_at = None
 
 
-def log(settings, message):
-    if settings["log"]:
-        print(message, flush=True)
+class Debouncer:
+    """The filter's state, apart from any device I/O, so it can be tested.
+
+    `virtual` needs write(type, code, value), write_event(event) and syn().
+    """
+
+    def __init__(self, virtual, settings):
+        self.virtual = virtual
+        self.settings = settings
+        self.held_buttons = {}  # watched button code -> HeldButton
+        self.keys_down = set()  # every key the virtual mouse holds down
+        self.dropping_events = False  # after SYN_DROPPED, until SYN_REPORT
+
+    def trace(self, message):
+        if self.settings["log"]:
+            log(message)
+
+    def next_deadline(self):
+        deadlines = [held.release_deadline
+                     for held in self.held_buttons.values()
+                     if held.release_deadline is not None]
+        return min(deadlines) if deadlines else None
+
+    def send_key(self, code, value):
+        self.virtual.write(ecodes.EV_KEY, code, value)
+        self.virtual.syn()
+        self.note_key(code, value)
+
+    def note_key(self, code, value):
+        if value:
+            self.keys_down.add(code)
+        else:
+            self.keys_down.discard(code)
+
+    def is_drag(self, held, now):
+        return (held.distance_moved >= self.settings["drag_distance"]
+                or now - held.pressed_at
+                >= self.settings["long_hold_seconds"])
+
+    def flush_expired_releases(self, now):
+        for button, held in list(self.held_buttons.items()):
+            deadline = held.release_deadline
+            if deadline is not None and now >= deadline:
+                self.trace("release sent: no press within the window")
+                self.send_key(button, 0)
+                del self.held_buttons[button]
+
+    def handle(self, event, now):
+        """Takes one event from the physical mouse.
+
+        Returns True when the caller should resync with the physical
+        mouse's real button state, because the kernel dropped events.
+        """
+        if event.type == ecodes.EV_SYN:
+            if event.code == ecodes.SYN_DROPPED:
+                log("kernel dropped mouse events; resyncing buttons")
+                self.dropping_events = True
+                return False
+            if event.code == ecodes.SYN_REPORT and self.dropping_events:
+                self.dropping_events = False
+                return True
+        if self.dropping_events:
+            return False  # a partial report; the resync replaces it
+        if event.type == ecodes.EV_REL and event.code in (
+                ecodes.REL_X, ecodes.REL_Y):
+            for held in self.held_buttons.values():
+                held.distance_moved += abs(event.value)
+        is_watched_button = (event.type == ecodes.EV_KEY
+                             and event.code in WATCHED_BUTTONS)
+        if is_watched_button and event.value == 1:
+            held = self.held_buttons.get(event.code)
+            if held is not None and held.release_deadline is not None:
+                held.release_deadline = None  # chatter: drop both
+                gap_ms = (now - held.released_at) * 1000
+                self.trace(f"chatter hidden: up for {gap_ms:.0f} ms")
+                return False
+            self.trace("press")
+            self.held_buttons[event.code] = HeldButton(now)
+        elif is_watched_button and event.value == 0:
+            held = self.held_buttons.get(event.code)
+            if held is not None:
+                drag = self.is_drag(held, now)
+                if drag:
+                    hold = self.settings["hold_seconds"]
+                else:
+                    hold = self.settings["click_hold_seconds"]
+                held_ms = (now - held.pressed_at) * 1000
+                self.trace(f"release after {held_ms:.0f} ms, "
+                           f"moved {held.distance_moved}: "
+                           f"{'drag' if drag else 'click'}, "
+                           f"holding it {hold * 1000:.0f} ms")
+                if hold > 0:
+                    held.release_deadline = now + hold
+                    held.released_at = now
+                    return False
+            self.held_buttons.pop(event.code, None)  # pass it on now
+        if event.type == ecodes.EV_KEY:
+            self.note_key(event.code, event.value)
+        self.virtual.write_event(event)
+        return False
+
+    def resync(self, physical_keys_down, now):
+        """Makes the virtual mouse's buttons match the physical mouse's.
+
+        A release that is being held back on purpose is left alone, unless
+        the button is down again, which is the same as a hidden chatter.
+        """
+        physical_keys_down = set(physical_keys_down)
+        for code in sorted(self.keys_down - physical_keys_down):
+            held = self.held_buttons.get(code)
+            if held is not None and held.release_deadline is not None:
+                continue
+            log(f"button {code} was stuck down on the virtual mouse "
+                f"but is up on the real one; releasing it")
+            self.send_key(code, 0)
+            self.held_buttons.pop(code, None)
+        for code in sorted(physical_keys_down):
+            held = self.held_buttons.get(code)
+            if held is not None and held.release_deadline is not None:
+                held.release_deadline = None
+                continue
+            if code in self.keys_down:
+                continue
+            log(f"button {code} is down on the real mouse but was up "
+                f"on the virtual one; pressing it")
+            self.send_key(code, 1)
+            if code in WATCHED_BUTTONS:
+                self.held_buttons[code] = HeldButton(now)
+
+    def release_all(self):
+        """Lets go of everything, so a detach never leaves a button down."""
+        for code in sorted(self.keys_down):
+            self.virtual.write(ecodes.EV_KEY, code, 0)
+        self.virtual.syn()
+        self.keys_down.clear()
+        self.held_buttons.clear()
 
 
 def forward_with_debounce(physical, settings):
     virtual = evdev.UInput.from_device(physical, name=VIRTUAL_DEVICE_NAME)
-    physical.grab()  # stop the compositor from seeing the raw device
-    held_buttons = {}  # button code -> HeldButton
-
-    def is_drag(held, now):
-        return (held.distance_moved >= settings["drag_distance"]
-                or now - held.pressed_at >= settings["long_hold_seconds"])
-
-    def flush_expired_releases(now):
-        for button, held in list(held_buttons.items()):
-            deadline = held.release_deadline
-            if deadline is not None and now >= deadline:
-                log(settings, "release sent: no press within the window")
-                virtual.write(ecodes.EV_KEY, button, 0)
-                virtual.syn()
-                del held_buttons[button]
-
-    def pending_deadlines():
-        return [held.release_deadline for held in held_buttons.values()
-                if held.release_deadline is not None]
-
+    debouncer = Debouncer(virtual, settings)
     try:
+        physical.grab()  # stop the compositor from seeing the raw device
+        debouncer.resync(physical.active_keys(), time.monotonic())
         while True:
-            deadlines = pending_deadlines()
-            if deadlines:
-                timeout = max(min(deadlines) - time.monotonic(), 0)
-            else:
-                timeout = None
+            notify_systemd("WATCHDOG=1")
+            timeout = IDLE_CHECK_SECONDS
+            deadline = debouncer.next_deadline()
+            if deadline is not None:
+                timeout = min(max(deadline - time.monotonic(), 0), timeout)
             readable, _, _ = select.select([physical.fd], [], [], timeout)
-            flush_expired_releases(time.monotonic())
+            now = time.monotonic()
+            debouncer.flush_expired_releases(now)
             if not readable:
+                if deadline is None:
+                    debouncer.resync(physical.active_keys(), now)
                 continue
-            for event in physical.read():
-                now = time.monotonic()
-                if event.type == ecodes.EV_REL and event.code in (
-                        ecodes.REL_X, ecodes.REL_Y):
-                    for held in held_buttons.values():
-                        held.distance_moved += abs(event.value)
-                is_watched_button = (event.type == ecodes.EV_KEY
-                                     and event.code in WATCHED_BUTTONS)
-                if is_watched_button and event.value == 1:
-                    held = held_buttons.get(event.code)
-                    if held is not None and held.release_deadline is not None:
-                        held.release_deadline = None  # chatter: drop both
-                        gap_ms = (now - held.released_at) * 1000
-                        log(settings,
-                            f"chatter hidden: up for {gap_ms:.0f} ms")
-                        continue
-                    log(settings, "press")
-                    held_buttons[event.code] = HeldButton(now)
-                elif is_watched_button and event.value == 0:
-                    held = held_buttons.get(event.code)
-                    if held is not None:
-                        drag = is_drag(held, now)
-                        if drag:
-                            hold = settings["hold_seconds"]
-                        else:
-                            hold = settings["click_hold_seconds"]
-                        held_ms = (now - held.pressed_at) * 1000
-                        log(settings, f"release after {held_ms:.0f} ms, "
-                            f"moved {held.distance_moved}: "
-                            f"{'drag' if drag else 'click'}, "
-                            f"holding it {hold * 1000:.0f} ms")
-                        if hold > 0:
-                            held.release_deadline = now + hold
-                            held.released_at = now
-                            continue
-                    held_buttons.pop(event.code, None)  # pass it on now
-                virtual.write_event(event)
+            try:
+                events = list(physical.read())
+            except BlockingIOError:
+                continue  # woken without events; not a disconnect
+            for event in events:
+                if debouncer.handle(event, time.monotonic()):
+                    debouncer.resync(physical.active_keys(),
+                                     time.monotonic())
     finally:
-        for button in held_buttons:
-            virtual.write(ecodes.EV_KEY, button, 0)  # never leave it stuck
-        virtual.syn()
-        virtual.close()
         try:
-            physical.ungrab()
-        except OSError:
-            pass  # device already gone
+            debouncer.release_all()  # never leave a button stuck
+        finally:
+            virtual.close()
+            try:
+                physical.ungrab()
+            except OSError:
+                pass  # device already gone
+            physical.close()
 
 
 def setting(argv_index, env_name, default):
@@ -161,7 +283,15 @@ def setting(argv_index, env_name, default):
     return os.environ.get(env_name, default)
 
 
+def exit_on_signal(signal_number, _frame):
+    # Raising here runs the `finally` blocks, which release the buttons.
+    log(f"stopping on signal {signal_number}")
+    sys.exit(0)
+
+
 def main():
+    signal.signal(signal.SIGTERM, exit_on_signal)
+    signal.signal(signal.SIGHUP, exit_on_signal)
     name_substring = setting(1, "MOUSE_DEBOUNCE_DEVICE", DEFAULT_DEVICE_NAME)
     hold_ms = int(setting(2, "MOUSE_DEBOUNCE_HOLD_MS", DEFAULT_HOLD_MS))
     settings = {
@@ -174,17 +304,23 @@ def main():
             "MOUSE_DEBOUNCE_CLICK_HOLD_MS", DEFAULT_CLICK_HOLD_MS)) / 1000,
         "log": os.environ.get("MOUSE_DEBOUNCE_LOG", "0") == "1",
     }
+    notify_systemd("READY=1")
+    waiting_logged = False
     while True:
+        notify_systemd("WATCHDOG=1")
         physical = find_device(name_substring)
         if physical is None:
+            if not waiting_logged:
+                log(f"waiting for a mouse named like {name_substring!r}")
+                waiting_logged = True
             time.sleep(RESCAN_INTERVAL_SECONDS)
             continue
-        print(f"debouncing {physical.name} ({physical.path}), {hold_ms} ms",
-              flush=True)
+        waiting_logged = False
+        log(f"debouncing {physical.name} ({physical.path}), {hold_ms} ms")
         try:
             forward_with_debounce(physical, settings)
-        except OSError:
-            print("device disconnected, waiting for it", flush=True)
+        except OSError as error:
+            log(f"mouse detached ({error}); waiting for it")
             time.sleep(RESCAN_INTERVAL_SECONDS)
 
 

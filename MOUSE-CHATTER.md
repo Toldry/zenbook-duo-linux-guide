@@ -22,6 +22,7 @@ several separate clicks.
 - [Settings](#settings)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
+- [If clicking stops working](#if-clicking-stops-working)
 - [The permanent fix](#the-permanent-fix)
 - [How to undo it](#how-to-undo-it)
 - [Sources](#sources)
@@ -171,6 +172,14 @@ release happened while the pointer was moving.
 If the mouse disconnects (sleep, out of range, switched off), the program
 waits and takes it over again when it comes back.
 
+Because every click goes through it, a wrong button state in the filter
+would break clicking everywhere. So it checks itself: once a second while
+the mouse is idle, and whenever the kernel says it lost events, it compares
+the buttons the virtual mouse holds down with the real mouse and corrects
+any difference, writing a line to the log when it does. It also tells
+systemd it is alive every second; if it stops doing that for 10 seconds,
+systemd restarts it.
+
 ---
 
 ## Limitations
@@ -183,6 +192,35 @@ waits and takes it over again when it comes back.
 - Only the left button is filtered.
 - If the switch gets worse and its gaps grow beyond the window, drags break
   again. Raise the window, or replace the switch.
+
+---
+
+## If clicking stops working
+
+On 2026-11-16 left click stopped working until a reboot, a week after the
+filter was installed. The cause isn't known yet, but the filter is the
+first suspect, so it now repairs a stuck button by itself (see
+[How it works](#how-it-works)). If it happens again, you don't need to
+reboot. Open a terminal with `Ctrl+Alt+T` and restart the filter:
+
+```bash
+sudo systemctl restart mouse-debounce
+```
+
+If clicking still doesn't work, stop the filter. The mouse then goes
+straight to GNOME again, chatter included:
+
+```bash
+sudo systemctl stop mouse-debounce
+```
+
+If even that doesn't bring the click back, the filter wasn't the cause;
+log out and back in instead. Either way, save the log before you reboot,
+so the cause can be found:
+
+```bash
+journalctl -b -u mouse-debounce --no-pager > ~/mouse-debounce-incident.txt
+```
 
 ---
 
