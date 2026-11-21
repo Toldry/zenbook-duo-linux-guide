@@ -686,7 +686,7 @@ Fans and heat aren't a battery risk: the laptop's embedded controller runs the f
 
 ### Moving Ubuntu to the internal disk later
 
-Once Ubuntu works well from the USB drive, you may want it on the internal SSD next to Windows. That's faster, and there's no drive hanging off the laptop. It also gives up this guide's main safety property, that Windows is physically untouched. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md) is a full plan for that move. It covers Windows 11 Home's Device Encryption, shrinking `C:`, encrypting Ubuntu, and sharing files through Google Drive, including an encrypted Cryptomator vault that also works on Android.
+Once Ubuntu works well from the USB drive, you may want it on the internal SSD next to Windows. That's faster, and there's no drive hanging off the laptop. It also gives up this guide's main safety property, that Windows is physically untouched. [DUAL-BOOT-PLAN.md](DUAL-BOOT-PLAN.md) is a full plan for that move. It covers Windows 11 Home's Device Encryption, shrinking `C:`, encrypting Ubuntu, and sharing files through Google Drive, including an encrypted Cryptomator vault that also works on Android. To move your existing external system over instead of reinstalling, see [MOVE-WITHOUT-REINSTALL.md](MOVE-WITHOUT-REINSTALL.md).
 
 ### Google Drive and Proton Drive
 

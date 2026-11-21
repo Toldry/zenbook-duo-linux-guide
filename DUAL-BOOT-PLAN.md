@@ -147,6 +147,8 @@ Goal: prove that daily life on Ubuntu works, and that the installer can do what 
 
 ## Phase 3: Install Ubuntu on the internal disk
 
+> **Want to keep your external system as it is, apps and all?** [MOVE-WITHOUT-REINSTALL.md](MOVE-WITHOUT-REINSTALL.md) replaces Phases 3–4 with a fresh encrypted install whose contents are then replaced by a copy of the external system.
+
 1. **Dock the keyboard** and plug in the charger. Boot the installer stick: **Shut Down**, power on, tap `Esc`.
 2. In the installer, choose **Install Ubuntu alongside Windows** with **encryption** (as checked in Phase 1, step 4).
    - It should use the **unallocated space** and the **existing ESP**.
